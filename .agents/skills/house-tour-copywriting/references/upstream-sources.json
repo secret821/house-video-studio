@@ -1,0 +1,77 @@
+{
+  "retrievedOn": "2026-10-25",
+  "scope": "project-only references; no upstream code executed",
+  "sources": [
+    {
+      "repository": "danfeistar/house-skills-kit",
+      "commit": "7a7bfb5b96bddafb12e91fa29cdf8e2cc84c21c5",
+      "license": "Apache-2.0",
+      "installedWith": "OpenAI bundled skill-installer, --dest .agents/skills, --method download",
+      "files": [
+        {
+          "local": ".agents/skills/sales-talk-library/LICENSE",
+          "source": "https://raw.githubusercontent.com/danfeistar/house-skills-kit/7a7bfb5b96bddafb12e91fa29cdf8e2cc84c21c5/LICENSE",
+          "sha256": "42d6395e50550c67165fdef8fb346620aee06369119488917a177303aa5ccf31",
+          "bytes": 11349
+        },
+        {
+          "local": ".agents/skills/sales-talk-library/README.md",
+          "source": "https://raw.githubusercontent.com/danfeistar/house-skills-kit/7a7bfb5b96bddafb12e91fa29cdf8e2cc84c21c5/skills/sales-talk-library/README.md",
+          "sha256": "a70fc127ab23a38f099476d8345123ff4c8fd77c9ca8f96c355f7a5988b3929c",
+          "bytes": 1155
+        },
+        {
+          "local": ".agents/skills/sales-talk-library/SKILL.md",
+          "source": "https://raw.githubusercontent.com/danfeistar/house-skills-kit/7a7bfb5b96bddafb12e91fa29cdf8e2cc84c21c5/skills/sales-talk-library/SKILL.md",
+          "sha256": "24cf172c21c0764db759c94451e85d0b0127fed93c22f0fb7b03c3e10301f80c",
+          "bytes": 3530
+        },
+        {
+          "local": ".agents/skills/sales-talk-library/domains.md",
+          "source": "https://raw.githubusercontent.com/danfeistar/house-skills-kit/7a7bfb5b96bddafb12e91fa29cdf8e2cc84c21c5/skills/sales-talk-library/domains.md",
+          "sha256": "0e121583d656f99546720d525c13ce5511a6ce265d7c754b046be1a1f70f5b4b",
+          "bytes": 17243
+        }
+      ]
+    },
+    {
+      "repository": "alexclowe/awesome-claude-cowork-plugins",
+      "commit": "99f3455d59e5f3ce66cde3b193fac514e28399b8",
+      "license": "MIT",
+      "installedWith": "OpenAI bundled skill-installer, --dest .agents/skills, --method download",
+      "files": [
+        {
+          "local": ".agents/skills/real-estate-marketing/LICENSE",
+          "source": "https://raw.githubusercontent.com/alexclowe/awesome-claude-cowork-plugins/99f3455d59e5f3ce66cde3b193fac514e28399b8/LICENSE",
+          "sha256": "ff2faeee3177585137faa8b408def9e6e90e9982b78717beced73d52d107a1fb",
+          "bytes": 1074
+        },
+        {
+          "local": ".agents/skills/real-estate-marketing/SKILL.md",
+          "source": "https://raw.githubusercontent.com/alexclowe/awesome-claude-cowork-plugins/99f3455d59e5f3ce66cde3b193fac514e28399b8/real-estate/skills/real-estate-marketing/SKILL.md",
+          "sha256": "bc683ba2a3b7ab113ecdedca78af261aaf48f6b63f4f3292b74335ecd9c561d2",
+          "bytes": 5955
+        }
+      ]
+    },
+    {
+      "source": "https://oomol.com/zh-tw/skills/%40qingxd1984/fangchan-tanpan-copywriter/source.md",
+      "author": "qingxd1984",
+      "pageVersion": "0.0.1",
+      "license": "not stated on public page; internal reference snapshot only",
+      "kind": "source.md snapshot, not complete upstream package",
+      "missingOptionalReferences": [
+        "references/verification-checklist.md",
+        "references/demo-flow.md",
+        "references/test-case.md"
+      ],
+      "files": [
+        {
+          "local": ".agents/skills/house-tour-copywriting/references/fangchan-tanpan-copywriter.md",
+          "sha256": "643bc8a7b2b4cd73b0fb70ab5355fb5c684bbb99e3820140ee8d9f0f0c933d69",
+          "bytes": 13875
+        }
+      ]
+    }
+  ]
+}

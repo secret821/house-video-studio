@@ -1,0 +1,2 @@
+# Keep downloaded third-party skill documentation byte-for-byte; authored code remains checked.
+.agents/skills/** -whitespace

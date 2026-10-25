@@ -1,0 +1,61 @@
+{
+  "name": "house-video-studio",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.14.0",
+  "scripts": {
+    "dev": "NODE_ENV=development node --import tsx server/index.ts",
+    "start": "NODE_ENV=production node --import tsx server/index.ts --production",
+    "studio": "remotion studio src/video/index.ts --no-open",
+    "build": "next build --webpack",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src server scripts *.mjs",
+    "format": "prettier --write src server scripts rules *.json *.md *.mjs",
+    "format:check": "prettier --check src server scripts rules *.json *.md *.mjs",
+    "test": "node --import tsx --test src/video/timeline.test.ts src/features/studio/property-text.test.ts server/security.test.ts server/cloud.test.ts server/render-cache.test.ts server/render-cache-io.test.ts server/video-edit.test.ts server/copy.test.ts",
+    "verify": "node --import tsx scripts/verify.ts",
+    "setup:avatar": "node --import tsx scripts/setup-avatar.ts",
+    "proxy": "node --import tsx scripts/proxy.ts",
+    "cloud": "node --import tsx scripts/cloud.ts"
+  },
+  "dependencies": {
+    "@remotion/bundler": "4.0.538",
+    "@remotion/cli": "4.0.538",
+    "@remotion/media": "4.0.538",
+    "@remotion/player": "4.0.538",
+    "@remotion/renderer": "4.0.538",
+    "@remotion/transitions": "4.0.538",
+    "animal-island-ui": "^2.3.0",
+    "clsx": "^2.1.1",
+    "express": "^5.1.0",
+    "multer": "^2.0.2",
+    "music-metadata": "^11.0.0",
+    "naive-icons": "^1.7.0",
+    "next": "16.4.3",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0",
+    "remotion": "4.0.538",
+    "sharp": "^0.34.0",
+    "tailwindcss": "^4.1.0",
+    "zod": "4.5.4"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.0.0",
+    "@tailwindcss/postcss": "^4.1.0",
+    "@types/express": "^5.0.0",
+    "@types/multer": "^2.0.0",
+    "@types/node": "^22.0.0",
+    "@types/react": "^19.2.0",
+    "@types/react-dom": "^19.2.0",
+    "eslint": "^9.0.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
+    "prettier": "^3.6.0",
+    "tsx": "^4.20.0",
+    "typescript": "^5.9.0",
+    "typescript-eslint": "^8.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

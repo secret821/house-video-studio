@@ -1,6 +1,9 @@
 /** Rendering must never turn user-controlled asset paths into arbitrary file or URL access. */
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { resolve } from 'node:path';
 
 import {
   EMPTY_PROJECT,
@@ -15,6 +18,78 @@ import {
 
 import { resolveAsset, validateAssets } from './media';
 import { parseProxyCopy } from './model-proxy';
+import { getAccessPolicy } from './access-policy';
+import {
+  getVideoBundleFingerprint,
+  getPrebuiltVideoBundle,
+  VideoBundleKind,
+} from './video-bundles';
+
+test('production video bundles require matching source and dependencies; stale or missing builds fail explicitly', () => {
+  const root = mkdtempSync(resolve(tmpdir(), 'video-bundle-contract-'));
+  try {
+    for (const directory of [
+      'src/video',
+      'src/services/definition',
+      '.video-bundles/real',
+    ])
+      mkdirSync(resolve(root, directory), { recursive: true });
+    writeFileSync(resolve(root, 'src/video/film.tsx'), 'video-v1');
+    writeFileSync(
+      resolve(root, 'src/services/definition/project.ts'),
+      'contract-v1',
+    );
+    writeFileSync(resolve(root, 'package.json'), '{}');
+    writeFileSync(resolve(root, 'pnpm-lock.yaml'), 'lock-v1');
+    const directory = resolve(root, '.video-bundles/real');
+    writeFileSync(resolve(directory, 'index.html'), 'browser bundle');
+    writeFileSync(
+      resolve(directory, 'source-manifest.json'),
+      JSON.stringify({ fingerprint: getVideoBundleFingerprint(root) }),
+    );
+    assert.equal(
+      getPrebuiltVideoBundle(VideoBundleKind.Real, root, true),
+      directory,
+    );
+    assert.equal(
+      getPrebuiltVideoBundle(VideoBundleKind.Real, root, false),
+      null,
+    );
+    assert.throws(
+      () => getPrebuiltVideoBundle(VideoBundleKind.Photo, root, true),
+      /缺失/,
+    );
+    writeFileSync(
+      resolve(root, 'src/services/definition/project.ts'),
+      'contract-v2',
+    );
+    assert.throws(
+      () => getPrebuiltVideoBundle(VideoBundleKind.Real, root, true),
+      /不匹配/,
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('public deployment trusts only its configured origin and preserves exact loopback hosts', () => {
+  const local = getAccessPolicy(4340);
+  assert.equal(local.hosts.has('121.41.6.73'), false);
+  const publicAccess = getAccessPolicy(4340, 'http://121.41.6.73/');
+  assert.equal(publicAccess.origins.has('http://121.41.6.73'), true);
+  assert.equal(publicAccess.hosts.has('127.0.0.1:4340'), true);
+  assert.equal(publicAccess.hosts.has('121.41.6.73.evil.invalid'), false);
+  assert.equal(publicAccess.origins.has('https://121.41.6.73'), false);
+  for (const value of [
+    '*',
+    'file:///etc/passwd',
+    'https://example.com/path',
+    'https://user:secret@example.com',
+    'https://example.com?x=1',
+    'https://example.com#fragment',
+  ])
+    assert.throws(() => getAccessPolicy(4340, value), /PUBLIC_ORIGIN/);
+});
 
 test('asset boundary rejects remote URLs, traversal and executable uploads', () => {
   [

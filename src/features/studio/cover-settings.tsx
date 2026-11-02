@@ -1,15 +1,15 @@
 /** Cover sources share the existing property lettering, local image upload and saved-project timing. */
-import { Input, Select } from 'animal-island-ui';
-import { UploadIcon as Upload } from 'naive-icons';
+import { Select, InputNumber } from 'antd';
 
 import {
   COVER_SOURCE_MAP,
   CoverSource,
 } from '@/services/definition/video-edit';
 
+import { FileUpload } from './file-upload';
 import type { useVideoEdit } from './use-video-edit';
 
-/** The default uses the opening's actual first frame; no approximate poster or silent fallback is used. */
+/** The default uses the first house photo or video's actual first frame, never an approximate poster. */
 export function CoverSettings({
   editor,
 }: {
@@ -17,16 +17,13 @@ export function CoverSettings({
 }) {
   const { project, busy } = editor;
   return (
-    <section
-      className="mt-7 space-y-5 border-t border-line pt-5"
-      aria-label="封面底图与展示时长"
-    >
-      <h3 className="text-lg leading-7 font-medium text-ink">封面底图与时长</h3>
+    <section className="space-y-6 pt-4" aria-label="封面底图与展示时长">
       <div className="island-select">
         <span className="studio-label" id="cover-source-label">
           封面底图来源
         </span>
         <Select
+          fieldNames={{ value: 'key', label: 'label' }}
           aria-labelledby="cover-source-label"
           aria-label="封面底图来源"
           value={project.coverSource}
@@ -40,26 +37,17 @@ export function CoverSettings({
           }
         />
         <p className="mt-2 text-xs text-muted">
-          默认使用口播开场视频第一帧。底图居中裁切，保留现有艺术字；预览、视频开头与导出封面一致。
+          默认使用首份房屋素材：视频取第一帧，照片直接使用。底图居中裁切，保留现有艺术字；预览、视频开头与导出封面一致。
         </p>
       </div>
       {project.coverSource === CoverSource.Image && (
         <div>
-          <label className="studio-button">
-            <Upload size={16} />
-            {project.coverImage ? '更换封面底图' : '上传封面底图'}
-            <input
-              className="hidden"
-              type="file"
-              accept=".jpg,.jpeg,.png,.webp"
-              aria-label="上传封面底图"
-              disabled={busy}
-              onChange={(event) => {
-                editor.uploadCoverImage(event.target.files?.[0]);
-                event.target.value = '';
-              }}
-            />
-          </label>
+          <FileUpload
+            label={project.coverImage ? '更换封面底图' : '上传封面底图'}
+            accept=".jpg,.jpeg,.png,.webp"
+            disabled={busy}
+            onFiles={(files) => editor.uploadCoverImage(files[0])}
+          />
           <p className="mt-2 text-xs text-muted">
             JPG / PNG / WebP，20MB内，仅在本机处理。更换失败保留已有底图。
           </p>
@@ -79,16 +67,15 @@ export function CoverSettings({
       )}
       <label className="block max-w-xs">
         <span className="studio-label">封面展示时长 / 秒</span>
-        <Input
-          type="number"
+        <InputNumber
           min={0.5}
           max={10}
           step={0.1}
           aria-label="封面展示时长"
           value={project.coverSeconds}
-          onChange={(event) => {
-            if (Number.isFinite(event.target.valueAsNumber))
-              editor.patch({ coverSeconds: event.target.valueAsNumber });
+          onChange={(value) => {
+            if (value === null) return;
+            if (Number.isFinite(value)) editor.patch({ coverSeconds: value });
           }}
         />
         <span className="mt-2 block text-xs text-muted">

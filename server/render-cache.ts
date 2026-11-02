@@ -1,4 +1,5 @@
 /** Content-addressed local frame ranges preserve unchanged scenes and exact crossfades. */
+import { workspaceDirectory } from './workspace';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -18,7 +19,7 @@ import {
 } from '../src/services/definition/project';
 import { getTimeline } from '../src/video/timeline';
 
-import { DATA, ROOT, resolveAsset, runFile } from './media';
+import { ROOT, resolveAsset, runFile } from './media';
 
 export interface RenderSegment {
   key: string;
@@ -64,6 +65,7 @@ export function planSegments(
   const common = {
     aspect,
     showCaptions,
+    watermark: project.watermark,
     template: identity.template,
     fps: FPS,
   };
@@ -154,7 +156,7 @@ export function planSegments(
   return segments;
 }
 
-export const CACHE_DIRECTORY = resolve(DATA, 'render-cache');
+export const CACHE_DIRECTORY = resolve(workspaceDirectory(), 'render-cache');
 const manifestSchema = z.object({
   key: z.string(),
   video: z.string(),
@@ -164,9 +166,9 @@ const manifestSchema = z.object({
 /** The same template identity invalidates both disk segments and the server's compiled bundle. */
 export function getTemplateFingerprint(): string {
   return fingerprint(
-    ['house-tour.tsx', 'timeline.ts', 'root.tsx']
+    ['house-tour.tsx', 'timeline.ts', 'root.tsx', 'video-watermark.tsx']
       .map((file) => readFileSync(resolve(ROOT, 'src/video', file), 'utf8'))
-      .concat('range-pcm-48000-v1'),
+      .concat('range-pcm-48000-veryfast-v2'),
   );
 }
 
@@ -186,9 +188,12 @@ export function getRenderSegments(project: Project): Array<RenderSegment> {
 /** Cache paths contain only server-generated hex hashes, never user-supplied filenames. */
 export function segmentPaths(segment: RenderSegment) {
   return {
-    video: resolve(CACHE_DIRECTORY, `${segment.key}.mp4`),
-    audio: resolve(CACHE_DIRECTORY, `${segment.key}.wav`),
-    manifest: resolve(CACHE_DIRECTORY, `${segment.key}.json`),
+    video: resolve(workspaceDirectory('render-cache'), `${segment.key}.mp4`),
+    audio: resolve(workspaceDirectory('render-cache'), `${segment.key}.wav`),
+    manifest: resolve(
+      workspaceDirectory('render-cache'),
+      `${segment.key}.json`,
+    ),
   };
 }
 
@@ -238,9 +243,15 @@ export function concatenateSegments(input: {
   id: string;
   output: string;
 }) {
-  mkdirSync(CACHE_DIRECTORY, { recursive: true });
-  const videoList = resolve(CACHE_DIRECTORY, `${input.id}-video.txt`);
-  const audioList = resolve(CACHE_DIRECTORY, `${input.id}-audio.txt`);
+  mkdirSync(workspaceDirectory('render-cache'), { recursive: true });
+  const videoList = resolve(
+    workspaceDirectory('render-cache'),
+    `${input.id}-video.txt`,
+  );
+  const audioList = resolve(
+    workspaceDirectory('render-cache'),
+    `${input.id}-audio.txt`,
+  );
   writeFileSync(
     videoList,
     input.segments

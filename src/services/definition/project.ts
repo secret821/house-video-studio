@@ -1,5 +1,6 @@
 /** Shared contract validates browser drafts and all rendering input. */
 import { z } from 'zod';
+import { musicCreditSchema } from './music-library';
 
 export enum Motion {
   Push = 'push',
@@ -37,16 +38,31 @@ export const DIMENSIONS = {
   [Aspect.Landscape]: { width: 1920, height: 1080 },
 };
 export const FPS = 30;
+export const DEFAULT_WATERMARK = '青连实拍';
+export const watermarkTextSchema = z
+  .string()
+  .trim()
+  .max(20, '水印最多20个字。')
+  .regex(/^[^\r\n]*$/, '水印请使用单行文字。')
+  .default(DEFAULT_WATERMARK);
+/** New uploads retain their original bytes; old drafts without this flag are already prepared. */
+export enum VideoPreparation {
+  Original = 'original',
+  Ready = 'ready',
+}
+export const VIDEO_PENDING_POSTER = '/demo/video-pending.svg';
 export const mediaPathSchema = z
   .string()
   .regex(
     /^\/(media|demo)\/[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp|wav|mp3|m4a|ogg|mp4)$/,
-  );
+  )
+  .or(z.literal(VIDEO_PENDING_POSTER));
 export const audioSchema = z.object({
   src: z.string().regex(/^\/(media|demo)\/[a-zA-Z0-9_-]+\.(wav|mp3|m4a|ogg)$/),
   duration: z.number().positive().max(600),
   name: z.string().max(160),
   text: z.string().max(300).nullable(),
+  musicCredit: musicCreditSchema.optional(),
 });
 export const sceneSchema = z.object({
   id: z.string().min(1).max(80),
@@ -64,6 +80,7 @@ export const imagePathSchema = z
   .string()
   .regex(/^\/(media|demo)\/[a-zA-Z0-9_-]+\.(jpg|jpeg|png|webp)$/);
 export const videoAssetSchema = z.object({
+  preparation: z.enum(VideoPreparation).optional(),
   src: z.string().regex(/^\/media\/[a-zA-Z0-9_-]+\.mp4$/),
   duration: z.number().positive().max(60),
   width: z.number().int().positive().max(4096),
@@ -116,6 +133,7 @@ export const projectSchema = z.object({
   transition: z.enum(Transition),
   transitionSeconds: z.number().min(0.3).max(0.8),
   showCaptions: z.boolean(),
+  watermark: watermarkTextSchema,
   demo: z.boolean(),
   scenes: z.array(sceneSchema).max(20),
   opening: openingSchema.nullable().default(null),
@@ -152,9 +170,10 @@ export const EMPTY_PROJECT: Project = {
   transition: Transition.Fade,
   transitionSeconds: 0.5,
   showCaptions: true,
+  watermark: DEFAULT_WATERMARK,
   demo: false,
   scenes: [],
   opening: null,
   music: null,
-  musicVolume: 0.12,
+  musicVolume: 0.2,
 };

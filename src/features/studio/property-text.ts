@@ -6,21 +6,15 @@ import {
   type VideoEditProject,
 } from '../../services/definition/video-edit';
 
-export const PROPERTY_FIELDS = [
-  { key: 'name', label: '小区 / 名称', max: 32 },
-  { key: 'floor', label: '楼层', max: 12 },
-  { key: 'area', label: '面积', max: 20 },
-  { key: 'layout', label: '户型', max: 20 },
-  { key: 'decoration', label: '装修', max: 12 },
-  { key: 'price', label: '总价', max: 20 },
-  { key: 'extra', label: '附加空间', max: 40 },
-] as const;
-type PropertyKey = (typeof PROPERTY_FIELDS)[number]['key'];
-export interface PropertyCandidate {
-  key: PropertyKey;
-  candidates: Array<string>;
-  value: string;
-}
+import {
+  PROPERTY_FIELDS,
+  type PropertyCandidate,
+} from '../../services/definition/property-extraction';
+export {
+  PROPERTY_FIELDS,
+  type PropertyCandidate,
+} from '../../services/definition/property-extraction';
+type PropertyKey = PropertyCandidate['key'];
 export type PropertyPatch = Partial<
   Pick<VideoEditProject, 'name' | 'facts' | 'price' | 'extra'>
 >;
@@ -61,14 +55,19 @@ function countNumber(value: string): string {
 /** Skip explicitly negated or uncertain claims rather than promoting them to facts. */
 function matchValues(
   text: string,
-  rule: { pattern: RegExp; format: (match: RegExpMatchArray) => string },
+  rule: {
+    pattern: RegExp;
+    format: (match: RegExpMatchArray) => string;
+    ignorePrefix?: RegExp;
+  },
 ): Array<string> {
   return Array.from(text.matchAll(rule.pattern))
     .filter((match) => {
       const prefix = text.slice(Math.max(0, match.index! - 16), match.index);
       return (
         !/(?:不|没|未|无|非|待确认)[^，。；\n]{0,4}$/.test(prefix) &&
-        !/[\d一二三四五六七八九十]\s*(?:[-—–~～/]|到|至)\s*$/.test(prefix)
+        !/[\d一二三四五六七八九十]\s*(?:[-—–~～/]|到|至)\s*$/.test(prefix) &&
+        !rule.ignorePrefix?.test(prefix)
       );
     })
     .map(rule.format);
@@ -106,15 +105,31 @@ export function extractPropertyText(raw: string): Array<PropertyCandidate> {
     .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xff10));
   const values: Record<PropertyKey, Array<string>> = {
     name: extractNames(text),
+    location: matchValues(text, {
+      pattern:
+        /(?:位于|坐落于|位置\s*[:：])\s*([\p{Script=Han}\p{N}·路号弄巷 ]{2,32})(?=[，,。；;\n]|$)/gu,
+      format: (match) => match[1].trim(),
+    }).filter((location) => !/1[3-9]\d{9}|电话|手机/.test(location)),
+    propertyType: matchValues(text, {
+      pattern: /独栋别墅|双拼别墅|联排别墅|叠拼别墅|别墅|洋房|公寓|住宅/g,
+      format: (match) => match[0],
+    }),
+    storeys: matchValues(text, {
+      pattern:
+        /(?:总高|共有|共|整栋|全栋)\s*([1-9]\d?|[一二两三四五六七八九]?十[一二三四五六七八九]?|[一二两三四五六七八九])\s*层|(?<![\d.一二两三四五六七八九十])([1-9]\d?|[一二两三四五六七八九]?十[一二三四五六七八九]?|[一二两三四五六七八九])\s*层\s*(?:格局|结构)/g,
+      format: (match) => `共${countNumber(match[1] ?? match[2])}层`,
+    }),
     floor: matchValues(text, {
       pattern:
-        /(?<![\d.一二两三四五六七八九十])([1-9]\d?|[一二两三四五六七八九]?十[一二三四五六七八九]?|[一二两三四五六七八九])\s*(?:楼|层)/g,
+        /(?<![\d.一二两三四五六七八九十])([1-9]\d?|[一二两三四五六七八九]?十[一二三四五六七八九]?|[一二两三四五六七八九])\s*(?:楼|层)(?!\s*(?:格局|结构))/g,
+      ignorePrefix: /(?:总高|共有|共|整栋|全栋)\s*$/,
       format: (match) => `${countNumber(match[1])}楼`,
     }),
     area: matchValues(text, {
       pattern:
-        /(?<![\d.])((?:大约|约)?\s*\d+(?:\.\d+)?)\s*(?:㎡|m²|m2|平方米|平米|平方|平)(?![A-Za-z\d])(?:\s*(左右|上下))?/giu,
-      format: (match) => `${match[1].replace(/\s/g, '')}㎡${match[2] ?? ''}`,
+        /(?<![\d.])(?:(产证(?:面积)?|产权面积)\s*[:：为是]?\s*)?((?:大约|约)?\s*\d+(?:\.\d+)?)\s*(?:个\s*)?(?:㎡|m²|m2|平方米|平米|平方|平)(?![A-Za-z\d])(?:\s*(左右|上下))?/giu,
+      format: (match) =>
+        `${match[1] ? '产证' : ''}${match[2].replace(/\s/g, '')}㎡${match[3] ?? ''}`,
     }),
     layout: matchValues(text, {
       pattern:
@@ -137,8 +152,8 @@ export function extractPropertyText(raw: string): Array<PropertyCandidate> {
     }),
     extra: matchValues(text, {
       pattern:
-        /(?:附带|另带|额外带|带|赠送|赠|送)\s*(?:一个|一间|个|间)?\s*(柴草间|储藏室|储物间|车库|车位|地下室)/g,
-      format: (match) => `另带${match[1]}`,
+        /(?:附带|另带|额外带|带|赠送|赠|送)\s*(?:一个|一间|个|间)?\s*(柴草间|储藏室|储物间|车库|车位|地下室)|挑空(?:大)?客厅/g,
+      format: (match) => (match[1] ? `另带${match[1]}` : '挑空客厅'),
     }),
   };
   return PROPERTY_FIELDS.map(({ key }) => {
@@ -158,7 +173,15 @@ export function propertyTextPatch(
   const patch: PropertyPatch = {};
   const facts = fields
     .filter((field) =>
-      ['floor', 'area', 'layout', 'decoration'].includes(field.key),
+      [
+        'location',
+        'propertyType',
+        'storeys',
+        'floor',
+        'area',
+        'layout',
+        'decoration',
+      ].includes(field.key),
     )
     .map((field) => field.value.trim())
     .filter(Boolean);

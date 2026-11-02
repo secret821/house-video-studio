@@ -4,6 +4,66 @@ import test from 'node:test';
 
 import { extractPropertyText, propertyTextPatch } from './property-text';
 
+export const VILLA_PROPERTY_COPY = `1. 在安福想找别墅的朋友，这套千万别划走。
+2. 位于老城区，出行配套都很成熟。
+3. 四层格局，产证375.38个平方。
+4. 一二楼做了挑空大客厅，气场直接拉满。
+5. 房间多，大家庭住起来宽松舒服。
+6. 这套总价336万。
+7. 想看户型、实地看房，直接私信我。`;
+
+test('villa speech keeps storeys distinct from floor and preserves the deed area without guessing a name or room count', () => {
+  const fields = extractPropertyText(VILLA_PROPERTY_COPY);
+  assert.deepEqual(propertyTextPatch(fields), {
+    facts: '老城区 / 别墅 / 共4层 / 产证375.38㎡',
+    price: '336万',
+    extra: '挑空客厅',
+  });
+  for (const key of ['name', 'floor', 'layout', 'decoration'])
+    assert.equal(fields.find((field) => field.key === key)?.value, '');
+});
+
+test('total storeys and actual floor coexist; spacing, spoken units and repeated versions remain compatible', () => {
+  const fields = extractPropertyText(
+    '总高 12 层，实际3楼。产证面积：375.38个平方米。产证375.38平方。',
+  );
+  assert.deepEqual(propertyTextPatch(fields), {
+    facts: '共12层 / 3楼 / 产证375.38㎡',
+  });
+  assert.equal(
+    fields.find((field) => field.key === 'area')?.candidates.length,
+    1,
+  );
+  assert.deepEqual(propertyTextPatch(extractPropertyText('四层 格局')), {
+    facts: '共4层',
+  });
+});
+
+test('villa facts still reject negation and ranges and require confirmation for conflicting storeys', () => {
+  assert.deepEqual(
+    propertyTextPatch(
+      extractPropertyText(
+        '不是别墅，不位于老城区，不是四层格局，不是产证375.38个平方，没有挑空大客厅。',
+      ),
+    ),
+    {},
+  );
+  assert.deepEqual(
+    propertyTextPatch(extractPropertyText('3到4层格局，375-380个平方')),
+    {},
+  );
+  const fields = extractPropertyText('四层格局，五层结构。');
+  assert.deepEqual(
+    fields.find((field) => field.key === 'storeys')?.candidates,
+    ['共4层', '共5层'],
+  );
+  assert.equal(fields.find((field) => field.key === 'storeys')?.value, '');
+  assert.deepEqual(
+    propertyTextPatch(extractPropertyText('位置：手机13812345678。')),
+    {},
+  );
+});
+
 export const PASTED_PROPERTY_COPY = `⚠️提醒：视频号正文不要直接写手机号，号码放在主页简介。
 版本1｜爆款吸睛版（视频号正文）
 🔥安福浅水湾好房推荐

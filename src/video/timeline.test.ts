@@ -5,6 +5,7 @@ import test from 'node:test';
 import {
   EMPTY_PROJECT,
   FPS,
+  projectSchema,
   Motion,
   Transition,
   type Scene,
@@ -80,4 +81,19 @@ test('talking opening plays in full before photo speech, without transition over
   assert.equal(timeline.scenes[0].start, 244);
   assert.equal(timeline.frames, 529);
   assert.equal(getTimeline({ ...EMPTY_PROJECT, opening }).frames, 244);
+});
+
+test('watermark defaults on legacy photo drafts, permits custom or empty text and rejects multiline or oversized input', () => {
+  const legacy = { ...EMPTY_PROJECT, watermark: undefined };
+  assert.equal(projectSchema.parse(legacy).watermark, '青连实拍');
+  assert.equal(
+    projectSchema.parse({ ...legacy, watermark: ' 自定义水印 ' }).watermark,
+    '自定义水印',
+  );
+  assert.equal(projectSchema.parse({ ...legacy, watermark: '' }).watermark, '');
+  for (const watermark of ['水印\n换行', '字'.repeat(21)])
+    assert.equal(
+      projectSchema.safeParse({ ...legacy, watermark }).success,
+      false,
+    );
 });

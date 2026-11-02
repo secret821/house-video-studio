@@ -22,15 +22,8 @@ import {
   type OpeningJob,
   type VideoAsset,
 } from '../src/services/definition/project';
-import {
-  DATA,
-  ROOT,
-  UPLOADS,
-  HttpError,
-  resolveAsset,
-  runFile,
-  synthesizeSpeech,
-} from './media';
+import { DATA, ROOT, UPLOADS, HttpError, resolveAsset, runFile } from './media';
+import { synthesizeSpeech } from './local-speech';
 
 const ENGINE = resolve(DATA, 'local-avatar/SadTalker-main');
 const PYTHON = resolve(DATA, 'local-avatar/venv/bin/python');
@@ -355,7 +348,7 @@ export function createOpeningJob(input: OpeningInput): OpeningJob {
             throw new HttpError(400, '开场录音实际时长需在30秒以内。');
           return { ...input.voiceover!, duration: format.duration };
         })
-      : synthesizeSpeech(input.script, 165);
+      : synthesizeSpeech(input.script);
     generation = audio.then((voiceover) => {
       if (voiceover.duration > 30)
         throw new HttpError(400, '开场配音超过30秒，请缩短台词。');

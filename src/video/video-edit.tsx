@@ -3,6 +3,8 @@ import { Audio, Video } from '@remotion/media';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
 import { Fragment, type CSSProperties } from 'react';
+import { getSubtitleFrames } from './video-subtitles';
+import { VideoWatermark } from './video-watermark';
 import {
   AbsoluteFill,
   Img,
@@ -14,6 +16,8 @@ import {
 
 import {
   CoverSource,
+  HouseMediaKind,
+  getHouseMaterials,
   type VideoEditProject,
   type VideoShot,
 } from '../services/definition/video-edit';
@@ -21,6 +25,7 @@ import {
 import {
   getVideoEditTimeline,
   getVideoMusicVolume,
+  VIDEO_EDIT_TIMING,
 } from './video-edit-timeline';
 
 const INK = '#141917';
@@ -54,10 +59,18 @@ function ShotCopy({
   const frames = timeline.shots[index].frames;
   const isLast = index === project.shots.length - 1;
   const outroOpacity = isLast
-    ? interpolate(frame, [frames - 3.6 * fps, frames - 3.2 * fps], [1, 0], {
-        extrapolateLeft: 'clamp',
-        extrapolateRight: 'clamp',
-      })
+    ? interpolate(
+        frame,
+        [
+          frames - VIDEO_EDIT_TIMING.captionExitLeadSeconds * fps,
+          frames - VIDEO_EDIT_TIMING.closingSeconds * fps,
+        ],
+        [1, 0],
+        {
+          extrapolateLeft: 'clamp',
+          extrapolateRight: 'clamp',
+        },
+      )
     : 1;
   return (
     <AbsoluteFill
@@ -89,11 +102,17 @@ function ShotCopy({
           position: 'absolute',
           left: 84,
           right: 84,
-          bottom: 250,
-          opacity: interpolate(frame, [0, 0.5 * fps], [0, 1], {
-            extrapolateRight: 'clamp',
-          }),
-          translate: `0 ${interpolate(frame, [0, 0.6 * fps], [24, 0], { extrapolateRight: 'clamp' })}px`,
+          bottom: project.subtitlesEnabled ? undefined : 250,
+          top: project.subtitlesEnabled ? 240 : undefined,
+          opacity: interpolate(
+            frame,
+            [0, VIDEO_EDIT_TIMING.captionFadeSeconds * fps],
+            [0, 1],
+            {
+              extrapolateRight: 'clamp',
+            },
+          ),
+          translate: `0 ${interpolate(frame, [0, VIDEO_EDIT_TIMING.captionEnterSeconds * fps], [24, 0], { extrapolateRight: 'clamp' })}px`,
         }}
       >
         <div
@@ -239,9 +258,14 @@ function ClosingInvitation({ project }: { project: VideoEditProject }) {
   return (
     <AbsoluteFill
       style={{
-        opacity: interpolate(frame, [0, 0.5 * fps], [0, 1], {
-          extrapolateRight: 'clamp',
-        }),
+        opacity: interpolate(
+          frame,
+          [0, VIDEO_EDIT_TIMING.closingFadeSeconds * fps],
+          [0, 1],
+          {
+            extrapolateRight: 'clamp',
+          },
+        ),
       }}
     >
       <PropertySummary project={project} />
@@ -251,13 +275,14 @@ function ClosingInvitation({ project }: { project: VideoEditProject }) {
 
 /** The score is a continuous low bed; original speech stays on the video clips' own clocks. */
 function TourMusic({ project }: { project: VideoEditProject }) {
+  const frame = useCurrentFrame();
   if (!project.music) return null;
   return (
     <Audio
       name="全片低音量背景音乐"
       src={project.music.src}
       loop
-      volume={(frame) => getVideoMusicVolume(frame, project)}
+      volume={getVideoMusicVolume(frame, project)}
     />
   );
 }
@@ -283,11 +308,59 @@ function OriginalSoundFade({ frames }: { frames: number }) {
   );
 }
 
+/** White outlined captions stay readable on real footage and appear at the source speech timestamps. */
+function SpeechSubtitles({ project }: { project: VideoEditProject }) {
+  const cues = getSubtitleFrames(project, getVideoEditTimeline(project));
+  return cues.map((cue) => (
+    <Sequence
+      key={cue.id}
+      name={`原声字幕：${cue.text}`}
+      from={cue.from}
+      durationInFrames={cue.to - cue.from}
+      layout="none"
+    >
+      <div
+        style={{
+          position: 'absolute',
+          left: 72,
+          right: 72,
+          bottom: 420,
+          textAlign: 'center',
+          fontFamily: FONT,
+          fontSize: 64,
+          fontWeight: 900,
+          lineHeight: 1.3,
+          color: '#fff',
+          WebkitTextStroke: '8px #111',
+          paintOrder: 'stroke fill',
+          textShadow: '0 4px 6px rgba(0,0,0,.6)',
+          overflowWrap: 'anywhere',
+          whiteSpace: 'pre-wrap',
+        }}
+      >
+        {cue.text}
+      </div>
+    </Sequence>
+  ));
+}
+
 /** The template is data-driven because cuts are authored in the app, with both cut timing and copy editable there. */
-export function VideoEditFilm({ project }: { project: VideoEditProject }) {
+export function VideoEditFilm({
+  project,
+  musicOnly = false,
+  graphicsOnly = false,
+}: {
+  project: VideoEditProject;
+  musicOnly?: boolean;
+  graphicsOnly?: boolean;
+}) {
   const { fps } = useVideoConfig();
   const timeline = getVideoEditTimeline(project);
-  if (!project.opening || !project.house || !timeline.shots.length)
+  if (
+    !project.opening ||
+    !getHouseMaterials(project).length ||
+    !timeline.shots.length
+  )
     return (
       <AbsoluteFill
         style={{
@@ -299,26 +372,30 @@ export function VideoEditFilm({ project }: { project: VideoEditProject }) {
           fontSize: 48,
         }}
       >
-        请上传两段视频
+        请上传口播开场和房屋视频或照片
       </AbsoluteFill>
     );
   return (
-    <AbsoluteFill style={{ background: INK }}>
-      <Sequence name="主封面" durationInFrames={timeline.coverFrames}>
-        <VideoEditCover project={project} />
-      </Sequence>
+    <AbsoluteFill style={{ background: graphicsOnly ? 'transparent' : INK }}>
+      {!graphicsOnly && (
+        <Sequence name="主封面" durationInFrames={timeline.coverFrames}>
+          <VideoEditCover project={project} />
+        </Sequence>
+      )}
       <Sequence from={timeline.coverFrames} layout="none">
         <TransitionSeries>
           <TransitionSeries.Sequence
             name="真人口播开场"
             durationInFrames={timeline.openingFrames}
           >
-            <Video
-              src={project.opening.src}
-              objectFit="cover"
-              volume={project.openingVolume}
-              style={{ width: '100%', height: '100%' }}
-            />
+            {!graphicsOnly && (
+              <Video
+                src={project.opening.src}
+                objectFit="cover"
+                volume={musicOnly ? 0 : project.openingVolume}
+                style={{ width: '100%', height: '100%' }}
+              />
+            )}
             <OpeningIdentity project={project} />
           </TransitionSeries.Sequence>
           {timeline.overlap > 0 && (
@@ -327,19 +404,31 @@ export function VideoEditFilm({ project }: { project: VideoEditProject }) {
               timing={linearTiming({ durationInFrames: timeline.overlap })}
             />
           )}
-          {timeline.shots.map(({ shot, frames }, index) => (
+          {timeline.shots.map(({ shot, source, frames }, index) => (
             <Fragment key={shot.id}>
               <TransitionSeries.Sequence
                 name={shot.title}
                 durationInFrames={frames}
               >
-                <Video
-                  src={project.house!.src}
-                  objectFit="cover"
-                  trimBefore={Math.round(shot.start * fps)}
-                  volume={project.houseVolume}
-                  style={{ width: '100%', height: '100%' }}
-                />
+                {!graphicsOnly && source?.kind === HouseMediaKind.Video && (
+                  <Video
+                    src={source.video.src}
+                    objectFit="cover"
+                    trimBefore={Math.round(shot.start * fps)}
+                    volume={musicOnly ? 0 : project.houseVolume}
+                    style={{ width: '100%', height: '100%' }}
+                  />
+                )}
+                {!graphicsOnly && source?.kind === HouseMediaKind.Image && (
+                  <Img
+                    src={source.src}
+                    style={{
+                      width: '100%',
+                      height: '100%',
+                      objectFit: 'cover',
+                    }}
+                  />
+                )}
                 <ShotCopy project={project} shot={shot} index={index} />
               </TransitionSeries.Sequence>
               {index < timeline.shots.length - 1 && timeline.overlap > 0 && (
@@ -365,12 +454,19 @@ export function VideoEditFilm({ project }: { project: VideoEditProject }) {
             <OriginalSoundFade frames={timeline.transitionFrames} />
           </Sequence>
         ))}
-      <TourMusic project={project} />
+      {!graphicsOnly && <TourMusic project={project} />}
       <Sequence
-        from={Math.max(timeline.houseStart, timeline.frames - 3.2 * fps)}
+        from={Math.max(
+          timeline.houseStart,
+          timeline.frames - VIDEO_EDIT_TIMING.closingSeconds * fps,
+        )}
         name="私信预约片尾"
       >
         <ClosingInvitation project={project} />
+      </Sequence>
+      <SpeechSubtitles project={project} />
+      <Sequence from={timeline.coverFrames} layout="none" name="右下角水印">
+        <VideoWatermark text={project.watermark} />
       </Sequence>
     </AbsoluteFill>
   );
@@ -378,15 +474,25 @@ export function VideoEditFilm({ project }: { project: VideoEditProject }) {
 
 /** Freeze the selected video's actual first frame; uploaded images share the same lettering and crop. */
 export function VideoEditCover({ project }: { project: VideoEditProject }) {
+  const first = getHouseMaterials(project)[0];
   const clip =
     project.coverSource === CoverSource.Opening
       ? project.opening
-      : project.house;
+      : first?.kind === HouseMediaKind.Video
+        ? first.video
+        : null;
+  const image =
+    project.coverSource === CoverSource.Image
+      ? project.coverImage
+      : project.coverSource === CoverSource.House &&
+          first?.kind === HouseMediaKind.Image
+        ? first.src
+        : null;
   return (
     <AbsoluteFill style={{ background: INK, color: WHITE, fontFamily: FONT }}>
-      {project.coverSource === CoverSource.Image && project.coverImage && (
+      {image && (
         <Img
-          src={project.coverImage}
+          src={image}
           style={{ width: '100%', height: '100%', objectFit: 'cover' }}
         />
       )}
@@ -436,7 +542,7 @@ export function VideoEditCover({ project }: { project: VideoEditProject }) {
           style={{
             ...COVER_LETTERING,
             width: '100%',
-            color: '#ec2426',
+            color: '#e87973',
             WebkitTextStroke: '14px #fff',
             textShadow: '7px 10px 0 #121212, -3px -3px 0 #121212',
             fontSize: 190,
@@ -490,6 +596,12 @@ export function VideoEditCover({ project }: { project: VideoEditProject }) {
       >
         房源信息与附属空间情况，以实地核实为准
       </div>
+      <VideoWatermark text={project.watermark} />
     </AbsoluteFill>
   );
+}
+
+/** Internal export-only composition; all typography and animations reuse the normal film. */
+export function VideoEditGraphics({ project }: { project: VideoEditProject }) {
+  return <VideoEditFilm project={project} graphicsOnly />;
 }

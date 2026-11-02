@@ -1,0 +1,72 @@
+name: house-video-studio
+services:
+  studio:
+    image: ${STUDIO_IMAGE:-house-video-studio:local}
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: Dockerfile
+    # Native Linux only. Preserve the application's exact loopback render/media trust boundary.
+    network_mode: host
+    user: '1000:1000'
+    init: true
+    restart: unless-stopped
+    stop_grace_period: 45s
+    cpus: ${STUDIO_CPUS:-3}
+    mem_limit: ${STUDIO_MEMORY_LIMIT:-2560m}
+    memswap_limit: ${STUDIO_MEMORY_LIMIT:-2560m}
+    pids_limit: 256
+    shm_size: 128mb
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set the exact public http(s) origin}
+      PORT: ${STUDIO_PORT:-4340}
+      NODE_OPTIONS: --max-old-space-size=${STUDIO_NODE_HEAP_MIB:-768}
+      STUDIO_TEMPORARY_MEDIA: '1'
+      PREBUILT_VIDEO_BUNDLES: '1'
+      STUDIO_VIDEO_THREADS: ${STUDIO_VIDEO_THREADS:-1}
+      STUDIO_AUTH_CONFIG: /run/studio/auth.json
+      STUDIO_SESSION_STORE: /var/lib/studio/sessions/sessions.json
+      STUDIO_WORKSPACE_LIMIT_MIB: ${STUDIO_WORKSPACE_LIMIT_MIB:-5120}
+      STUDIO_MIN_DISK_FREE_MIB: ${STUDIO_MIN_DISK_FREE_MIB:-1024}
+    volumes:
+      - type: bind
+        source: ${STUDIO_DATA_DIR:?Set a dedicated data directory}
+        target: /app/data
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STUDIO_SESSION_DIR:?Set a private sessions directory}
+        target: /var/lib/studio/sessions
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STUDIO_AUTH_FILE:?Set the administrator-owned auth file}
+        target: /run/studio/auth.json
+        read_only: true
+        bind:
+          create_host_path: false
+      - type: bind
+        source: ${STUDIO_CLOUD_CONFIG_FILE:?Set a private cloud config file, empty when unused}
+        target: /app/.env.cloud
+        read_only: true
+        bind:
+          create_host_path: false
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:'+process.env.PORT+'/api/auth/session',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+      interval: 30s
+      timeout: 5s
+      start_period: 90s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: '10m'
+        max-file: '3'

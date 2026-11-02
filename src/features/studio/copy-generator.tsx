@@ -1,10 +1,12 @@
 /** Shared studio copy suggestions remain separate from authored text until the user explicitly applies them. */
-import { Button, Checkbox } from 'animal-island-ui';
+import { Button, Checkbox, Input } from 'antd';
 import { useEffect, useState } from 'react';
 
 import {
   COPY_MODEL,
+  COPY_RESTRICTED_CLAIMS,
   CopyKind,
+  copyResultSchema,
   type CopyInput,
   type CopyResult,
 } from '../../services/definition/copy';
@@ -33,8 +35,26 @@ export function CopyGenerator({
     result: CopyResult;
   } | null>(null);
   const [applied, setApplied] = useState(false);
-  const identity = JSON.stringify(input);
+  const [brief, setBrief] = useState('');
+  const requestInput: CopyInput = { ...input, brief };
+  const identity = JSON.stringify(requestInput);
   const result = saved?.identity === identity ? saved.result : null;
+  const invalidDraft = Boolean(
+    result &&
+    (!copyResultSchema.safeParse(result).success ||
+      result.items.some(
+        (item) =>
+          !item.title.trim() ||
+          !item.caption.trim() ||
+          COPY_RESTRICTED_CLAIMS.some(
+            (claim) =>
+              `${item.title} ${item.caption} ${input.kind === CopyKind.Photo ? item.narration : ''}`.includes(
+                claim,
+              ) && !JSON.stringify(input.facts).includes(claim),
+          ) ||
+          (input.kind === CopyKind.Photo && !item.narration.trim()),
+      )),
+  );
   useEffect(() => {
     let active = true;
     api
@@ -64,7 +84,7 @@ export function CopyGenerator({
     setError('');
     setApplied(false);
     api
-      .generateCopy(input, true)
+      .generateCopy(requestInput, true)
       .then((result) => setSaved({ identity, result }))
       .catch((error: unknown) =>
         setError(
@@ -72,6 +92,27 @@ export function CopyGenerator({
         ),
       )
       .finally(() => setLoading(false));
+  }
+
+  /** Edits stay in this suggestion draft, preserving shot identities, evidence and the provider's cached result. */
+  function editItem(
+    id: string,
+    field: 'title' | 'narration' | 'caption',
+    value: string,
+  ) {
+    setSaved((current) => {
+      if (!current || current.identity !== identity) return current;
+      return {
+        ...current,
+        result: {
+          ...current.result,
+          items: current.result.items.map((item) =>
+            item.id === id ? { ...item, [field]: value } : item,
+          ),
+        },
+      };
+    });
+    setApplied(false);
   }
   return (
     <section
@@ -82,8 +123,20 @@ export function CopyGenerator({
       <p className="text-xs text-muted">
         {input.kind === CopyKind.Photo
           ? '只发送当前房源图片及已填房源信息，不发送人物开场。'
-          : '在本机为每段抽取两张关键帧，再发送到百炼；不发送人物开场与视频声音。生成的是画面说明，不是原声逐字字幕。'}
+          : '按片段时长抽取2～6张关键帧，长片段写得更完整；照片直接看图。不发送人物开场与声音，画面说明不等于原声逐字字幕。'}
       </p>
+      <label className="block">
+        <span className="studio-label">文案要求（可选）</span>
+        <Input.TextArea
+          aria-label="文案要求"
+          className="min-h-24 w-full resize-y px-4 py-3 text-sm"
+          maxLength={2000}
+          value={brief}
+          disabled={disabled || loading}
+          onChange={(event) => setBrief(event.target.value)}
+          placeholder="例如：自然带看语气，重点说明画面中的布局和收纳；长片段分两三句，不要空泛广告语。房源数字请先填入上方信息。"
+        />
+      </label>
       <p className="text-xs text-muted">
         {COPY_MODEL} · {capability.message}{' '}
         <a
@@ -95,7 +148,7 @@ export function CopyGenerator({
           打开百炼控制台
         </a>
       </p>
-      <Checkbox
+      <Checkbox.Group
         disabled={disabled || loading}
         options={[
           {
@@ -131,24 +184,81 @@ export function CopyGenerator({
       )}
       {result && (
         <div className="space-y-4" aria-label="待采纳文案建议">
+          {result.warnings?.map((warning) => (
+            <p key={warning} role="alert" className="text-sm text-danger">
+              {warning}
+            </p>
+          ))}
           <p className="text-xs text-muted">
             {result.cached ? '已复用缓存，未再次调用模型。' : '建议已生成。'}
-            请核对房源事实和画面，采纳后仍可编辑。
+            可直接修改下方文案，修改不调用模型；点击采纳后才写入视频。画面依据只读。
           </p>
-          {result.items.map((item) => (
+          {result.items.map((item, index) => (
             <div key={item.id} className="space-y-2 border-t border-line pt-3">
-              <p className="font-bold text-ink">{item.title}</p>
+              <label className="block">
+                <span className="studio-label">第{index + 1}段 · 标题</span>
+                <Input
+                  aria-label={`建议第${index + 1}段标题`}
+                  value={item.title}
+                  maxLength={24}
+                  disabled={disabled || loading}
+                  onChange={(event) =>
+                    editItem(item.id, 'title', event.target.value)
+                  }
+                />
+              </label>
               {input.kind === CopyKind.Photo && (
-                <p className="text-sm text-body">解说：{item.narration}</p>
+                <label className="block">
+                  <span className="studio-label">
+                    解说 · {item.narration.length}/160
+                  </span>
+                  <Input.TextArea
+                    aria-label={`建议第${index + 1}段解说`}
+                    className="min-h-24 w-full resize-y px-4 py-3 text-sm"
+                    value={item.narration}
+                    maxLength={160}
+                    disabled={disabled || loading}
+                    onChange={(event) =>
+                      editItem(item.id, 'narration', event.target.value)
+                    }
+                  />
+                </label>
               )}
-              <p className="text-sm text-body">字幕：{item.caption}</p>
+              <label className="block">
+                <span className="studio-label">
+                  字幕 · {item.caption.length}/100
+                </span>
+                <Input.TextArea
+                  aria-label={`建议第${index + 1}段字幕`}
+                  className="min-h-24 w-full resize-y px-4 py-3 text-sm"
+                  value={item.caption}
+                  maxLength={100}
+                  disabled={disabled || loading}
+                  onChange={(event) =>
+                    editItem(item.id, 'caption', event.target.value)
+                  }
+                />
+              </label>
+              {input.kind === CopyKind.Video && (
+                <p className="text-sm text-body">
+                  完整说明参考：{item.narration}
+                  <span className="block text-xs text-muted">
+                    供改写字幕参考，不写入成片或替换原声；短镜头字幕按阅读长度保留完整短句。
+                  </span>
+                </p>
+              )}
               <p className="text-xs text-muted">画面依据：{item.evidence}</p>
             </div>
           ))}
+          {invalidDraft && (
+            <p role="alert" className="text-xs text-danger">
+              请补齐标题/字幕/照片解说，并删改房源信息中未确认的装修、产权或车位等标签，再采纳。
+            </p>
+          )}
           <Button
             type="primary"
             className="island-action w-full"
-            disabled={disabled || loading || applied}
+            disabled={disabled || loading || applied || invalidDraft}
             onClick={() => {
               onApply(result);
               setApplied(true);

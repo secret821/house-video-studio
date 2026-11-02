@@ -169,3 +169,12 @@ test('switching an opening from generated to uploaded invalidates only its own c
   assert.equal(invalidated[0].label, '人物开场');
   assert.equal(invalidated[0].start, 0);
 });
+
+test('editing or disabling the full-film watermark invalidates every photo range including the opening', () => {
+  const segments = planSegments(project, identity);
+  for (const watermark of ['自定义水印', '']) {
+    const next = { ...project, watermark };
+    assert.equal(changed(next).length, segments.length);
+    assert.ok(changed(next).some((segment) => segment.sceneIds.length === 0));
+  }
+});

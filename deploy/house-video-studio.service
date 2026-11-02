@@ -1,0 +1,35 @@
+[Unit]
+Description=House Video Studio (single workspace)
+After=network.target
+
+[Service]
+Type=simple
+User=housevideo
+Group=housevideo
+WorkingDirectory=/opt/house-video-studio/current
+Environment=NODE_ENV=production
+Environment=PORT=4340
+Environment=PUBLIC_ORIGIN=http://121.41.6.73
+Environment=STUDIO_AUTH_CONFIG=/opt/house-video-studio/private/auth.json
+Environment=STUDIO_SESSION_STORE=/opt/house-video-studio/private/sessions/sessions.json
+Environment=PREBUILT_VIDEO_BUNDLES=1
+Environment=STUDIO_TEMPORARY_MEDIA=1
+Environment=PATH=/opt/house-video-studio/runtime/node22/bin:/opt/house-video-studio/runtime/pnpm/node_modules/.bin:/usr/local/bin:/usr/bin:/bin
+Environment=PNPM_HOME=/opt/house-video-studio/shared/pnpm
+Environment=XDG_CACHE_HOME=/opt/house-video-studio/shared/cache
+Environment=npm_config_userconfig=/dev/null
+ExecStart=/opt/house-video-studio/runtime/node22/bin/node --max-old-space-size=384 --import tsx server/index.ts --production
+Restart=on-failure
+RestartSec=5
+KillMode=control-group
+TimeoutStopSec=30
+MemoryAccounting=true
+MemoryLimit=768M
+CPUQuota=100%
+OOMScoreAdjust=500
+NoNewPrivileges=true
+PrivateTmp=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

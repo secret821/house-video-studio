@@ -1,8 +1,13 @@
 /** Bridge durable Bailian generation into the editor's existing opening-job contract. */
+import {
+  workspaceDirectory,
+  workspaceState,
+  holdWorkspace,
+  getWorkspace,
+} from './workspace';
 import { randomUUID } from 'node:crypto';
 import {
   existsSync,
-  mkdirSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -18,7 +23,7 @@ import {
   type OpeningJob,
 } from '../src/services/definition/project';
 
-import { DATA, HttpError, resolveAsset } from './media';
+import { HttpError, resolveAsset } from './media';
 import {
   cloudOpening,
   cloudSpeech,
@@ -26,9 +31,11 @@ import {
   withCloudLock,
 } from './cloud';
 
-const JOBS = resolve(DATA, 'cloud-opening-jobs');
-mkdirSync(JOBS, { recursive: true });
-let activeJob: OpeningJob | null = null;
+/** Running jobs belong to the authenticated account, including after the HTTP request ends. */
+const jobState = () =>
+  workspaceState('cloud-opening', () => ({
+    activeJob: null as OpeningJob | null,
+  }));
 
 /** Return configuration flags and the spend guard without exposing credentials or signed media URLs. */
 export function getOpeningCapability() {
@@ -37,13 +44,18 @@ export function getOpeningCapability() {
     ready: status.ready,
     message: status.ready
       ? `百炼万相 720P · 12秒含缓冲 · 本轮最多2版 / 30元；预算已预留${status.reservedYuan.toFixed(2)}元。生成会上传人物照与配音。`
-      : '百炼尚未配置：请填写项目 .env.cloud 的北京地域 API Key 和业务空间 ID，保存后刷新页面。',
+      : getWorkspace().id !== 'legacy'
+        ? '该账号未授权付费人物生成，请直接上传已录制的视频。'
+        : '百炼尚未配置：请填写项目 .env.cloud 的北京地域 API Key 和业务空间 ID，保存后刷新页面。',
   };
 }
 
 /** Publish status atomically so refresh never reads half a task. */
 function persist(job: OpeningJob) {
-  const path = resolve(JOBS, `${job.id}.json`);
+  const path = resolve(
+    workspaceDirectory('cloud-opening-jobs'),
+    `${job.id}.json`,
+  );
   writeFileSync(`${path}.tmp`, JSON.stringify(job), { mode: 0o600 });
   renameSync(`${path}.tmp`, path);
 }
@@ -52,8 +64,9 @@ function persist(job: OpeningJob) {
 export function getOpeningJob(id: string): OpeningJob {
   if (!/^[a-f0-9-]{36}$/.test(id))
     throw new HttpError(400, '无效的开场任务编号。');
-  if (activeJob?.id === id) return activeJob;
-  const path = resolve(JOBS, `${id}.json`);
+  const active = jobState().activeJob;
+  if (active?.id === id) return active;
+  const path = resolve(workspaceDirectory('cloud-opening-jobs'), `${id}.json`);
   if (!existsSync(path)) throw new HttpError(404, '开场任务不存在。');
   const job = openingJobSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
   if (job.status === JobStatus.Rendering) {
@@ -67,19 +80,21 @@ export function getOpeningJob(id: string): OpeningJob {
 
 /** Only cloud jobs are restored; an old SadTalker result cannot masquerade as a new model output. */
 export function getLatestOpeningJob(): OpeningJob | null {
-  if (activeJob) return activeJob;
-  const files = readdirSync(JOBS)
+  if (jobState().activeJob) return jobState().activeJob;
+  const files = readdirSync(workspaceDirectory('cloud-opening-jobs'))
     .filter((name) => /^[a-f0-9-]{36}\.json$/.test(name))
     .sort(
       (a, b) =>
-        statSync(resolve(JOBS, b)).mtimeMs - statSync(resolve(JOBS, a)).mtimeMs,
+        statSync(resolve(workspaceDirectory('cloud-opening-jobs'), b)).mtimeMs -
+        statSync(resolve(workspaceDirectory('cloud-opening-jobs'), a)).mtimeMs,
     );
   return files.length ? getOpeningJob(files[0].replace('.json', '')) : null;
 }
 
 /** Freeze validated editor inputs before starting a bounded, exclusively locked cloud workflow. */
 export function createOpeningJob(input: OpeningInput): OpeningJob {
-  if (activeJob) throw new HttpError(409, '已有百炼人物开场正在生成，请稍候。');
+  if (jobState().activeJob)
+    throw new HttpError(409, '已有百炼人物开场正在生成，请稍候。');
   const capability = getOpeningCapability();
   if (!capability.ready) throw new HttpError(503, capability.message);
   resolveAsset(input.photo);
@@ -103,7 +118,8 @@ export function createOpeningJob(input: OpeningInput): OpeningJob {
     clip: null,
   };
   persist(job);
-  activeJob = job;
+  const releaseWorkspace = holdWorkspace();
+  jobState().activeJob = job;
   withCloudLock(() => {
     const speech = input.voiceover
       ? Promise.resolve(input.voiceover)
@@ -131,7 +147,8 @@ export function createOpeningJob(input: OpeningInput): OpeningJob {
       try {
         persist(job);
       } finally {
-        activeJob = null;
+        jobState().activeJob = null;
+        releaseWorkspace();
       }
     })
     .catch((error: unknown) => {

@@ -1,4 +1,10 @@
 /** Aliyun Beijing speech and portrait generation, scoped to the authorized local test project. */
+import {
+  workspaceDirectory,
+  getWorkspace,
+  TEMPORARY_MEDIA,
+  sharedWorkspaceDirectory,
+} from './workspace';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -21,14 +27,7 @@ import {
   type AudioAsset,
   type VideoAsset,
 } from '../src/services/definition/project';
-import {
-  DATA,
-  ROOT,
-  UPLOADS,
-  inspectAudio,
-  resolveAsset,
-  runFile,
-} from './media';
+import { ROOT, HttpError, inspectAudio, resolveAsset, runFile } from './media';
 import { inspectVideo } from './opening';
 import {
   CloudCallKind,
@@ -38,7 +37,9 @@ import {
   updateCloudCall,
 } from './cloud-budget';
 
-export const CLOUD_DIRECTORY = resolve(DATA, 'house-tour-v2/cloud');
+export const CLOUD_DIRECTORY = TEMPORARY_MEDIA
+  ? sharedWorkspaceDirectory('cloud')
+  : resolve(workspaceDirectory(), 'house-tour-v2/cloud');
 export const CLOUD_LEDGER = resolve(CLOUD_DIRECTORY, 'budget.json');
 export const CLOUD_VOICES = ['Cherry', 'Serena'] as const;
 export type CloudVoice = (typeof CLOUD_VOICES)[number];
@@ -84,16 +85,19 @@ export function readCloudConfig() {
 /** Default command is read-only and does not validate credentials through a billable cloud request. */
 export function getCloudStatus() {
   const config = readCloudConfig();
+  const entitled = getWorkspace().id === 'legacy' && !TEMPORARY_MEDIA;
   const ledger = readCloudLedger(CLOUD_LEDGER);
   return {
-    ready: config.ready,
+    ready: config.ready && entitled,
     keyConfigured: config.keyReady,
     workspaceConfigured: config.workspaceReady,
-    speechReady: config.keyReady,
+    speechReady: config.keyReady && entitled,
     speechModel: TTS_MODEL,
-    speechMessage: config.keyReady
-      ? '百炼自然女声 Cherry · 生成会调用云服务，修改解说后需重新生成。'
-      : '请在项目 .env.cloud 中填写北京地域 DASHSCOPE_API_KEY，保存后刷新页面。',
+    speechMessage: !entitled
+      ? '该账号未授权付费配音或人物生成；可上传自己的录音或视频。'
+      : config.keyReady
+        ? '百炼自然女声 Cherry · 生成会调用云服务，修改解说后需重新生成。'
+        : '请在项目 .env.cloud 中填写北京地域 DASHSCOPE_API_KEY，保存后刷新页面。',
     region: 'cn-beijing',
     model: VIDEO_MODEL,
     resolution: '720P',
@@ -254,7 +258,7 @@ export function downloadCloudMedia(
   maxBytes: number,
 ) {
   const url = aliyunMediaUrl(raw);
-  const disk = statfsSync(UPLOADS);
+  const disk = statfsSync(workspaceDirectory('uploads'));
   if (disk.bavail * disk.bsize < maxBytes * 2)
     return Promise.reject(new Error('本机剩余空间不足，请先释放空间。'));
   const part = `${target}.part`;
@@ -348,6 +352,10 @@ export function cloudSpeech(
   text: string,
   voice: CloudVoice,
 ): Promise<AudioAsset> {
+  if (getWorkspace().id !== 'legacy' || TEMPORARY_MEDIA)
+    return Promise.reject(
+      new HttpError(403, '该账号未授权付费配音或人物生成。'),
+    );
   z.string()
     .min(1)
     .max(300)
@@ -361,7 +369,7 @@ export function cloudSpeech(
     );
   z.enum(CLOUD_VOICES).parse(voice);
   const key = `speech-${fingerprint(TTS_MODEL, text, voice, 'dashscope-qwen-tts-v1')}`;
-  const path = resolve(UPLOADS, `${key}.wav`);
+  const path = resolve(workspaceDirectory('uploads'), `${key}.wav`);
   const existing = readCloudLedger(CLOUD_LEDGER).calls[key];
   if (existing?.audio && existsSync(path))
     return Promise.resolve(existing.audio);
@@ -465,7 +473,7 @@ function generateCloudOpening(
     );
   const key = openingKey(photo, audio);
   const existing = readCloudLedger(CLOUD_LEDGER).calls[key];
-  const path = resolve(UPLOADS, `${key}.mp4`);
+  const path = resolve(workspaceDirectory('uploads'), `${key}.mp4`);
   if (existing?.clip && existsSync(path)) return Promise.resolve(existing.clip);
   if (existing?.state === CloudCallState.Failed)
     return Promise.reject(new Error('原任务已失败，本轮不自动重提付费生成。'));
@@ -679,6 +687,10 @@ export function cloudOpening(
   photo: string,
   audio: AudioAsset,
 ): Promise<VideoAsset> {
+  if (getWorkspace().id !== 'legacy' || TEMPORARY_MEDIA)
+    return Promise.reject(
+      new HttpError(403, '该账号未授权付费配音或人物生成。'),
+    );
   const audioPath = resolveAsset(audio.src);
   return inspectAudio(audioPath, { name: audio.name, text: audio.text }).then(
     (verified) => {

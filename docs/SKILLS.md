@@ -40,3 +40,11 @@
 核对 Skill frontmatter、本地依赖链接、固定版本、文件校验值与许可证；未运行第三方代码。只新增资料与项目调用说明，不修改网页或当前草稿，因此本轮不做浏览器 UI 验收，也不重新导出视频。
 
 Recreation Metrics O1/O2/O3/S1/S2/S3：N/A，非网页复刻、无可见 UI 改动。
+
+## 背景音乐库
+
+项目内 `.agents/skills/bgm-library/SKILL.md` 维护内置兜底＋在线 ccMixter 搜索及试听。来源 TeamWiseFlow/xiaobei `skills/bgm-library`，固定 commit `47aea0be00db5f86e27615224e45e558d737d9ee`。原说明、摘要与完整 LICENSE 已保留；上游存在多租户限制并关闭 TLS 校验，因此不运行、不发布其脚本。应用按官方 API 独立实现，不调用自动选曲或付费服务。此技能不改变音乐本身的授权条件；用户需保留 CC BY 署名。
+
+## 制作页界面维护
+
+2026-11-01使用本机 `frontend-ui-guardrails` 技能（`/Users/liu/.codex/skills/frontend-ui-guardrails/SKILL.md`）和 `frontend-coding-standards` 修复制作用页布局与交互呈现。主题以项目 `rules/design-system.md` 为准，图标使用 `@ant-design/icons`；技能仅用于开发，不在页面运行或部署时执行。

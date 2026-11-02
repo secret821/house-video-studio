@@ -1,24 +1,19 @@
 /** Per-photo copy and explicit audio actions live next to the photo selector, not hidden in export settings. */
-import { Button, Input } from 'animal-island-ui';
+import { Button, Input, Collapse } from 'antd';
 import clsx from 'clsx';
-import {
-  MicIcon as Mic,
-  RefreshIcon as RefreshCw,
-  UploadIcon as Upload,
-} from 'naive-icons';
 
 import { CopyKind } from '../../services/definition/copy';
 
+import { FileUpload } from './file-upload';
 import { useStudio } from './use-studio';
 import { CopyGenerator } from './copy-generator';
 
 interface SceneEditorProps {
   studio: ReturnType<typeof useStudio>;
-  canExport: boolean;
 }
 
 /** Subtitle-only edits preserve narration; changing spoken text requires an explicit voice action. */
-export function SceneEditor({ studio, canExport }: SceneEditorProps) {
+export function SceneEditor({ studio }: SceneEditorProps) {
   const { selected, project, busy } = studio;
   if (!selected)
     return (
@@ -43,26 +38,42 @@ export function SceneEditor({ studio, canExport }: SceneEditorProps) {
           点选上方照片，在这里编辑。字幕与画面更新在本机完成。
         </p>
       </div>
-      <CopyGenerator
-        disabled={busy}
-        input={{
-          kind: CopyKind.Photo,
-          facts: {
-            name: project.name,
-            location: project.location,
-            area: project.area,
-            layout: project.layout,
-            price: project.price,
+      <Collapse
+        className="studio-disclosure"
+        ghost
+        expandIconPlacement="end"
+        items={[
+          {
+            key: 'panel',
+            label: <>按照片生成文案（可选）</>,
+            forceRender: true,
+            children: (
+              <>
+                <CopyGenerator
+                  disabled={busy}
+                  input={{
+                    kind: CopyKind.Photo,
+                    facts: {
+                      name: project.name,
+                      location: project.location,
+                      area: project.area,
+                      layout: project.layout,
+                      price: project.price,
+                    },
+                    scene: { id: selected.id, src: selected.src },
+                  }}
+                  onApply={(result) =>
+                    studio.patchScene({
+                      title: result.items[0].title,
+                      narration: result.items[0].narration,
+                      caption: result.items[0].caption,
+                    })
+                  }
+                />
+              </>
+            ),
           },
-          scene: { id: selected.id, src: selected.src },
-        }}
-        onApply={(result) =>
-          studio.patchScene({
-            title: result.items[0].title,
-            narration: result.items[0].narration,
-            caption: result.items[0].caption,
-          })
-        }
+        ]}
       />
       <label className="block">
         <span className="studio-label">当前图片标题</span>
@@ -77,7 +88,7 @@ export function SceneEditor({ studio, canExport }: SceneEditorProps) {
         <span className="studio-label">
           解说文案 · {selected.narration.length}/300
         </span>
-        <textarea
+        <Input.TextArea
           className={clsx(
             'w-full min-h-28',
             'px-3 py-2',
@@ -96,7 +107,7 @@ export function SceneEditor({ studio, canExport }: SceneEditorProps) {
       </label>
       <label className="block">
         <span className="studio-label">独立字幕文案 · 免费修改</span>
-        <textarea
+        <Input.TextArea
           className={clsx(
             'w-full min-h-24',
             'px-3 py-2',
@@ -143,55 +154,27 @@ export function SceneEditor({ studio, canExport }: SceneEditorProps) {
           <Button
             className="island-action w-full"
             disabled={
-              busy || emptyScript || !studio.speechCapability.speechReady
-            }
-            onClick={studio.generateSelectedSpeech}
-            icon={<Mic size={16} />}
-          >
-            仅此张百炼配音（按字计费）
-          </Button>
-          <Button
-            className="island-action w-full"
-            disabled={
               busy || emptyScript || !studio.speechCapability.localSpeechReady
             }
             onClick={studio.generateLocalSpeech}
           >
-            仅此张本机配音（免费）
+            仅此张 Kokoro 配音（免费）
           </Button>
-          <label className="studio-button w-full">
-            <Upload size={15} />
-            上传当前图片录音
-            <input
-              className="hidden"
-              type="file"
-              accept=".wav,.mp3,.m4a,.ogg"
-              aria-label="上传当前图片录音"
-              onChange={(event) => {
-                studio.addAudio(event.target.files?.[0], true);
-                event.target.value = '';
-              }}
-            />
-          </label>
+          <FileUpload
+            label="上传当前图片录音"
+            accept=".wav,.mp3,.m4a,.ogg"
+            disabled={busy}
+            onFiles={(files) => studio.addAudio(files[0], true)}
+          />
         </div>
         <p className="mt-2 text-xs text-muted">
-          本机配音音色较基础；上传本人录音也无需模型费用。人物开场不会重新生成。
+          Kokoro v1.1-zh
+          中文女声，本地生成；也可上传本人录音。人物开场保留原声。
         </p>
       </div>
-      <div>
-        <Button
-          type="primary"
-          className="island-action w-full"
-          disabled={!canExport}
-          onClick={studio.exportVideo}
-          icon={<RefreshCw size={16} />}
-        >
-          更新当前片段并合成（免费）
-        </Button>
-        <p className="mt-2 text-xs text-muted">
-          自动更新所有已改片段及相邻转场，复用其余缓存。首次需建立缓存；不自动生成任何配音。
-        </p>
-      </div>
+      <p className="text-xs text-muted">
+        修改完成后，点击底部“生成成片”。生成会更新所有已改片段并复用其他缓存，不会自动生成配音。
+      </p>
     </section>
   );
 }

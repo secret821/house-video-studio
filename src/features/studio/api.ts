@@ -1,5 +1,11 @@
 /** All HTTP, parsing and import/export boundaries are confined to this business module. */
 import { z } from 'zod';
+import { workspaceRequest } from './auth-api';
+import {
+  readBrowserDraft,
+  saveBrowserDraft,
+  BrowserDraftKind,
+} from './browser-draft';
 
 import {
   audioSchema,
@@ -19,23 +25,29 @@ import {
 } from '../../services/definition/copy';
 
 import videoEditApi from './video-edit-api';
+import type { VideoUploadOptions } from './video-edit-api';
+import { propertyExtractionResultSchema } from '../../services/definition/property-extraction';
 
 /** A failed HTTP request remains a rejection carrying the server's useful message. */
 function request<T>(
   path: string,
   options: { schema: z.ZodType<T>; init?: RequestInit },
 ): Promise<T> {
-  return fetch(`/api/${path}`, options.init).then((response) =>
-    response.json().then((body: unknown) => {
-      if (!response.ok) {
-        const error = z.object({ message: z.string() }).safeParse(body);
-        throw new Error(
-          error.success ? error.data.message : `请求失败 (${response.status})`,
-        );
-      }
-      return options.schema.parse(body);
-    }),
-  );
+  return workspaceRequest(options.init)
+    .then((init) => fetch(`/api/${path}`, init))
+    .then((response) =>
+      response.json().then((body: unknown) => {
+        if (!response.ok) {
+          const error = z.object({ message: z.string() }).safeParse(body);
+          throw new Error(
+            error.success
+              ? error.data.message
+              : `请求失败 (${response.status})`,
+          );
+        }
+        return options.schema.parse(body);
+      }),
+    );
 }
 
 /** Shared JSON mutation setup; the API owns the wire representation. */
@@ -58,6 +70,11 @@ function uploadImage(file: File) {
 }
 
 const api = {
+  extractProperty: (text: string, freeQuotaConfirmed: true) =>
+    request('copy/extract-property', {
+      schema: propertyExtractionResultSchema,
+      init: post({ text, freeQuotaConfirmed }),
+    }),
   getCopyCapability: () =>
     request('copy/get-capability', { schema: copyCapabilitySchema }),
   generateCopy: (input: CopyInput, freeQuotaConfirmed: true) =>
@@ -66,8 +83,8 @@ const api = {
       init: post({ input, freeQuotaConfirmed }),
     }),
   /** Reuse local video ingestion; project schema limits photo-mode openings to 60 seconds. */
-  uploadOpeningVideo: (file: File) =>
-    videoEditApi.uploadVideo(file).then((clip) => {
+  uploadOpeningVideo: (file: File, options?: VideoUploadOptions) =>
+    videoEditApi.uploadVideo(file, options).then((clip) => {
       if (clip.duration > 60)
         throw new Error('照片带看的开场视频请控制在60秒以内。');
       return openingSchema.parse({
@@ -79,7 +96,7 @@ const api = {
       });
     }),
   getDemo: () => request('get-demo', { schema: projectSchema }),
-  getDraft: () => request('get-draft', { schema: projectSchema.nullable() }),
+  getDraft: () => readBrowserDraft(BrowserDraftKind.Photo, projectSchema),
   getCapabilities: () =>
     request('get-capabilities', {
       schema: z.object({
@@ -89,10 +106,7 @@ const api = {
       }),
     }),
   saveDraft: (project: Project) =>
-    request('save-draft', {
-      schema: z.object({ saved: z.boolean() }),
-      init: post(project),
-    }),
+    saveBrowserDraft(BrowserDraftKind.Photo, projectSchema, project),
   uploadImage,
   getLatestRender: () =>
     request('get-latest-render-job', { schema: jobSchema.nullable() }),

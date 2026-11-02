@@ -1,7 +1,16 @@
 /** Offline video-editing contracts are independent from cloud portrait and photo drafts. */
 import { z } from 'zod';
+import { speechCaptionsSchema } from './subtitles';
 
-import { audioSchema, imagePathSchema, jobSchema } from './project';
+import {
+  audioSchema,
+  DEFAULT_WATERMARK,
+  watermarkTextSchema,
+  imagePathSchema,
+  jobSchema,
+  VideoPreparation,
+  VIDEO_PENDING_POSTER,
+} from './project';
 
 export enum VideoRole {
   Opening = 'opening',
@@ -14,25 +23,83 @@ export enum CoverSource {
 }
 export const COVER_SOURCE_MAP = {
   [CoverSource.Opening]: '口播开场视频第一帧',
-  [CoverSource.House]: '房屋实拍视频第一帧',
+  [CoverSource.House]: '首份房屋素材（视频首帧 / 照片）',
   [CoverSource.Image]: '单独上传封面底图',
 };
 export const VIDEO_ROLE_MAP = {
   [VideoRole.Opening]: '真人口播开场',
   [VideoRole.House]: '房屋实拍视频',
 };
-export const importedVideoSchema = z.object({
-  src: z.string().regex(/^\/media\/import-[a-f0-9]{64}\.mp4$/),
-  poster: imagePathSchema,
-  name: z.string().max(160),
-  duration: z.number().min(0.5).max(600),
-  width: z.number().int().positive().max(4096),
-  height: z.number().int().positive().max(4096),
-  hasAudio: z.boolean(),
-});
+export const importedVideoSchema = z
+  .object({
+    src: z
+      .string()
+      .regex(/^\/media\/(?:import-[a-f0-9]{64}|source-[a-f0-9-]{36})\.mp4$/),
+    preparation: z.enum(VideoPreparation).optional(),
+    poster: z.union([imagePathSchema, z.literal(VIDEO_PENDING_POSTER)]),
+    name: z.string().max(160),
+    duration: z.number().min(0.5).max(600),
+    width: z.number().int().positive().max(4096),
+    height: z.number().int().positive().max(4096),
+    hasAudio: z.boolean(),
+    speechCaptions: speechCaptionsSchema.optional(),
+  })
+  .superRefine((video, context) => {
+    if (
+      video.speechCaptions?.some(
+        (cue) => cue.endMs > Math.ceil(video.duration * 1000),
+      )
+    )
+      context.addIssue({
+        code: 'custom',
+        path: ['speechCaptions'],
+        message: '字幕时间不能超出原片时长。',
+      });
+  });
+export enum HouseMediaKind {
+  Video = 'video',
+  Image = 'image',
+}
+export const houseMaterialSchema = z.discriminatedUnion('kind', [
+  z.object({
+    id: z.string().min(1).max(80),
+    kind: z.literal(HouseMediaKind.Video),
+    video: importedVideoSchema,
+  }),
+  z.object({
+    id: z.string().min(1).max(80),
+    kind: z.literal(HouseMediaKind.Image),
+    src: imagePathSchema,
+    name: z.string().max(160),
+    duration: z.number().min(2).max(30),
+  }),
+]);
+export type HouseMaterial = z.infer<typeof houseMaterialSchema>;
+
+/** Legacy one-video drafts remain playable while new projects own an ordered mixed-media collection. */
+export function getHouseMaterials(project: {
+  house: ImportedVideo | null;
+  materials: Array<HouseMaterial>;
+}): Array<HouseMaterial> {
+  if (project.materials.length) return project.materials;
+  return project.house
+    ? [{ id: 'legacy-house', kind: HouseMediaKind.Video, video: project.house }]
+    : [];
+}
+
+/** Shot references are resolved consistently for validation, preview, cloud keyframes and export. */
+export function getShotMaterial(
+  sources: Array<HouseMaterial>,
+  shot: { sourceId?: string },
+): HouseMaterial | undefined {
+  return shot.sourceId
+    ? sources.find((source) => source.id === shot.sourceId)
+    : sources[0];
+}
 export const videoShotSchema = z
   .object({
     id: z.string().min(1).max(80),
+    sourceId: z.string().min(1).max(80).optional(),
     start: z.number().min(0).max(600),
     end: z.number().min(0).max(600),
     title: z.string().max(24),
@@ -44,6 +111,7 @@ export const videoEditSchema = z
     sessionId: z.string().uuid().optional(),
     opening: importedVideoSchema.nullable(),
     house: importedVideoSchema.nullable(),
+    materials: z.array(houseMaterialSchema).max(12).default([]),
     name: z.string().min(1).max(32),
     facts: z.string().max(60),
     price: z.string().max(20),
@@ -52,10 +120,12 @@ export const videoEditSchema = z
     shots: z.array(videoShotSchema).max(12),
     music: audioSchema.nullable(),
     musicVolume: z.number().min(0).max(0.6),
+    watermark: watermarkTextSchema,
     openingVolume: z.number().min(0).max(1.5),
     houseVolume: z.number().min(0).max(1),
+    subtitlesEnabled: z.boolean().optional(),
     transitionSeconds: z.number().min(0).max(0.8),
-    coverSource: z.enum(CoverSource).default(CoverSource.Opening),
+    coverSource: z.enum(CoverSource).default(CoverSource.House),
     coverImage: imagePathSchema.nullable().default(null),
     coverSeconds: z
       .number()
@@ -64,6 +134,22 @@ export const videoEditSchema = z
       .default(1.2),
   })
   .superRefine((project, context) => {
+    const clips = [
+      project.opening,
+      ...getHouseMaterials(project).flatMap((source) =>
+        source.kind === HouseMediaKind.Video ? [source.video] : [],
+      ),
+    ];
+    if (
+      clips.reduce(
+        (count, clip) => count + (clip?.speechCaptions?.length ?? 0),
+        0,
+      ) > 6000
+    )
+      context.addIssue({
+        code: 'custom',
+        message: '全片字幕最多6000条，请拆分项目。',
+      });
     if (project.coverSource === CoverSource.Image && !project.coverImage)
       context.addIssue({
         code: 'custom',
@@ -75,11 +161,19 @@ export const videoEditSchema = z
       project.shots.length
     )
       context.addIssue({ code: 'custom', message: '片段编号不能重复。' });
+    const sources = getHouseMaterials(project);
+    if (new Set(sources.map((source) => source.id)).size !== sources.length)
+      context.addIssue({ code: 'custom', message: '房屋素材编号不能重复。' });
     project.shots.forEach((shot) => {
-      if (!project.house || shot.end > project.house.duration + 0.001)
+      const source = getShotMaterial(sources, shot);
+      const duration =
+        source?.kind === HouseMediaKind.Video
+          ? source.video.duration
+          : source?.duration;
+      if (duration === undefined || shot.end > duration + 0.001)
         context.addIssue({
           code: 'custom',
-          message: '片段结束时间不能超出房屋原视频。',
+          message: '片段需要对应有效房屋素材，结束时间不能超出素材时长。',
         });
     });
   });
@@ -94,18 +188,20 @@ export type VideoEditJob = z.infer<typeof videoEditJobSchema>;
 export const EMPTY_VIDEO_EDIT: VideoEditProject = {
   opening: null,
   house: null,
-  name: '安福 · 浅水湾',
-  facts: '3楼 / 128.65㎡ / 精装修',
-  price: '59万',
-  extra: '另带柴草间',
-  contact: '私信咨询 · 预约实地看房',
+  materials: [],
+  name: '新房源视频',
+  facts: '',
+  price: '',
+  extra: '',
+  contact: '',
   shots: [],
   music: null,
-  musicVolume: 0.08,
+  musicVolume: 0.4,
+  watermark: DEFAULT_WATERMARK,
   openingVolume: 1,
   houseVolume: 1,
   transitionSeconds: 0.35,
-  coverSource: CoverSource.Opening,
+  coverSource: CoverSource.House,
   coverImage: null,
   coverSeconds: 1.2,
 };

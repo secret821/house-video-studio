@@ -1,4 +1,8 @@
 /** One local rendering job at a time, with durable progress and actionable failure state. */
+import { prepareVideoForRender } from './video-edit';
+import { acquireMediaSlot } from './media-queue';
+import { workspaceRenderOrigin, sharedWorkspaceDirectory } from './workspace';
+import { workspaceDirectory, workspaceState } from './workspace';
 import { bundle } from '@remotion/bundler';
 import { renderMedia, selectComposition } from '@remotion/renderer';
 import { randomUUID } from 'node:crypto';
@@ -22,10 +26,15 @@ import {
   type RenderJob,
 } from '../src/services/definition/project';
 
-import { DATA, EXPORTS, ROOT, HttpError, validateAssets } from './media';
+import { ROOT, HttpError, validateAssets, resolveAsset } from './media';
+import { checkStorageReservations, reserveStorage } from './storage-capacity';
 import { getTimeline } from '../src/video/timeline';
 import {
-  CACHE_DIRECTORY,
+  getPrebuiltVideoBundle,
+  VideoBundleKind,
+  RENDER_CACHE_LIMITS,
+} from './video-bundles';
+import {
   getTemplateFingerprint,
   getRenderSegments,
   hasCachedSegment,
@@ -34,13 +43,15 @@ import {
   concatenateSegments,
 } from './render-cache';
 
-let activeJob: RenderJob | null = null;
+/** Running jobs belong to the authenticated account, including after the HTTP request ends. */
+const jobState = () =>
+  workspaceState('render', () => ({ activeJob: null as RenderJob | null }));
 let bundlePromise: Promise<string> | null = null;
 let bundleIdentity = '';
 
 /** Atomic status writes allow clients to observe real progress and recover after restart. */
 function persistJob(job: RenderJob) {
-  const path = resolve(DATA, 'jobs', `${job.id}.json`);
+  const path = resolve(workspaceDirectory('jobs'), `${job.id}.json`);
   writeFileSync(`${path}.tmp`, JSON.stringify(job));
   renameSync(`${path}.tmp`, path);
 }
@@ -50,14 +61,22 @@ function getBundle() {
   const identity = getTemplateFingerprint();
   if (!bundlePromise || bundleIdentity !== identity) {
     bundleIdentity = identity;
-    bundlePromise = bundle({
-      entryPoint: resolve(ROOT, 'src/video/index.ts'),
-      enableCaching: false,
-      outDir: resolve(DATA, 'bundle'),
-    }).catch((error: unknown) => {
-      bundlePromise = null;
-      throw error;
-    });
+    bundlePromise = Promise.resolve()
+      .then(() => {
+        const prebuilt = getPrebuiltVideoBundle(VideoBundleKind.Photo, ROOT);
+        return (
+          prebuilt ??
+          bundle({
+            entryPoint: resolve(ROOT, 'src/video/index.ts'),
+            enableCaching: false,
+            outDir: sharedWorkspaceDirectory('bundles', 'photo'),
+          })
+        );
+      })
+      .catch((error: unknown) => {
+        bundlePromise = null;
+        throw error;
+      });
   }
   return bundlePromise;
 }
@@ -65,8 +84,9 @@ function getBundle() {
 /** Read a persisted job; an interrupted render is never reported as still making progress. */
 export function getJob(id: string): RenderJob {
   if (!/^[a-f0-9-]{36}$/.test(id)) throw new HttpError(400, '无效的任务编号。');
-  if (activeJob?.id === id) return activeJob;
-  const path = resolve(DATA, 'jobs', `${id}.json`);
+  const active = jobState().activeJob;
+  if (active?.id === id) return active;
+  const path = resolve(workspaceDirectory('jobs'), `${id}.json`);
   if (!existsSync(path)) throw new HttpError(404, '任务不存在。');
   const job = jobSchema.parse(JSON.parse(readFileSync(path, 'utf8')));
   if (job.status === JobStatus.Rendering) {
@@ -79,8 +99,8 @@ export function getJob(id: string): RenderJob {
 
 /** Restore the latest task after page refresh, including interrupted-task failure state. */
 export function getLatestJob(): RenderJob | null {
-  if (activeJob) return activeJob;
-  const directory = resolve(DATA, 'jobs');
+  if (jobState().activeJob) return jobState().activeJob;
+  const directory = workspaceDirectory('jobs');
   const paths = readdirSync(directory)
     .filter((name) => /^[a-f0-9-]{36}\.json$/.test(name))
     .sort(
@@ -93,16 +113,16 @@ export function getLatestJob(): RenderJob | null {
 
 /** Validate a frozen project snapshot before starting any background work. */
 export function createJob(project: Project, origin: string): RenderJob {
-  if (activeJob) throw new HttpError(409, '已有视频正在导出，请等待完成。');
+  if (jobState().activeJob)
+    throw new HttpError(409, '已有视频正在导出，请等待完成。');
   project = structuredClone(project);
+  origin = workspaceRenderOrigin(origin);
   validateAssets(project);
-  const segments = getRenderSegments(project);
-  const cached = new Set(
-    segments.filter(hasCachedSegment).map((segment) => segment.key),
-  );
-  mkdirSync(CACHE_DIRECTORY, { recursive: true });
+  let segments: ReturnType<typeof getRenderSegments> = [];
+  let cached = new Set<string>();
+  mkdirSync(workspaceDirectory('render-cache'), { recursive: true });
   // Budget both the temporary encoder output and final 1080P asset before launching Chromium/ffmpeg.
-  const disk = statfsSync(EXPORTS);
+  const disk = statfsSync(workspaceDirectory('exports'));
   const requiredBytes =
     (64 + (getTimeline(project).frames / FPS) * 2) * 1024 * 1024;
   if (disk.bavail * disk.bsize < requiredBytes)
@@ -115,104 +135,151 @@ export function createJob(project: Project, origin: string): RenderJob {
     id: randomUUID(),
     status: JobStatus.Rendering,
     progress: 0,
-    message: '正在准备视频模板…',
+    message: '等待服务器处理资源，其他账号的任务会继续运行…',
     output: null,
     cache: {
       rendered: 0,
       reused: segments.filter((segment) => cached.has(segment.key)).length,
-      total: segments.length,
+      total: Math.max(1, segments.length),
     },
   };
-  const absoluteProject: Project = {
-    ...project,
-    opening: project.opening && {
-      ...project.opening,
-      clip: project.opening.clip && {
-        ...project.opening.clip,
-        src: origin + project.opening.clip.src,
-      },
-    },
-    scenes: project.scenes.map((scene) => ({
-      ...scene,
-      src: origin + scene.src,
-      voiceover: scene.voiceover && {
-        ...scene.voiceover,
-        src: origin + scene.voiceover.src,
-      },
-    })),
-    music: project.music && {
-      ...project.music,
-      src: origin + project.music.src,
-    },
-  };
-  activeJob = job;
-  persistJob(job);
+  const preparationBytes = project.opening?.clip
+    ? statSync(resolveAsset(project.opening.clip.src)).size * 2
+    : 0;
+  const releaseStorage = reserveStorage(
+    Math.ceil(requiredBytes + preparationBytes),
+  );
+  try {
+    persistJob(job);
+  } catch (error) {
+    releaseStorage();
+    throw error;
+  }
+  jobState().activeJob = job;
   const browserExecutable =
     process.env.CHROME_PATH ||
     (process.platform === 'darwin'
       ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
       : undefined);
-  const preparation = segments.every((segment) => cached.has(segment.key))
-    ? Promise.resolve()
-    : getBundle()
-        .then((serveUrl) =>
-          selectComposition({
-            serveUrl,
-            id: 'HouseTour',
-            inputProps: { project: absoluteProject },
-            browserExecutable,
-          }).then((composition) => ({ serveUrl, composition })),
-        )
-        .then(({ serveUrl, composition }) =>
-          segments.reduce(
-            (chain, segment, index) =>
-              chain.then(() => {
-                if (cached.has(segment.key)) {
-                  job.progress = ((index + 1) / segments.length) * 0.95;
-                  job.message = `复用缓存：${segment.label}`;
-                  return;
-                }
-                const paths = segmentPaths(segment);
-                return renderMedia({
-                  serveUrl,
-                  composition,
-                  inputProps: { project: absoluteProject },
-                  codec: 'h264',
-                  audioCodec: 'pcm-16',
-                  separateAudioTo: paths.audio,
-                  sampleRate: 48000,
-                  pixelFormat: 'yuv420p',
-                  crf: 20,
-                  concurrency: 1,
-                  outputLocation: paths.video,
-                  frameRange: [segment.start, segment.end],
-                  browserExecutable,
-                  timeoutInMilliseconds: 60_000,
-                  onProgress: ({ progress }) => {
-                    job.progress =
-                      ((index + progress) / segments.length) * 0.95;
-                    job.message = `本地更新 ${segment.label} · ${Math.round(progress * 100)}%（复用${job.cache!.reused}段）`;
-                  },
-                }).then(() => {
-                  commitSegment(segment);
-                  job.cache!.rendered += 1;
-                  persistJob(job);
-                });
-              }),
-            Promise.resolve(),
-          ),
+  let release: (() => void) | undefined;
+  const preparation = acquireMediaSlot().then((unlock) => {
+    release = unlock;
+    checkStorageReservations();
+    const clip = project.opening?.clip;
+    job.message = '正在准备开场原片：转码与处理原声…';
+    return (clip ? prepareVideoForRender(clip) : Promise.resolve(null)).then(
+      (asset) => {
+        if (asset && project.opening?.clip)
+          project.opening.clip = {
+            ...project.opening.clip,
+            ...asset,
+            duration: project.opening.clip.duration,
+          };
+        segments = getRenderSegments(project);
+        cached = new Set(
+          segments.filter(hasCachedSegment).map((segment) => segment.key),
         );
+        job.cache = {
+          rendered: 0,
+          reused: cached.size,
+          total: segments.length,
+        };
+        const absoluteProject: Project = {
+          ...project,
+          opening: project.opening && {
+            ...project.opening,
+            clip: project.opening.clip && {
+              ...project.opening.clip,
+              src: origin + project.opening.clip.src,
+            },
+          },
+          scenes: project.scenes.map((scene) => ({
+            ...scene,
+            src: origin + scene.src,
+            voiceover: scene.voiceover && {
+              ...scene.voiceover,
+              src: origin + scene.voiceover.src,
+            },
+          })),
+          music: project.music && {
+            ...project.music,
+            src: origin + project.music.src,
+          },
+        };
+
+        return segments.every((segment) => cached.has(segment.key))
+          ? Promise.resolve()
+          : getBundle()
+              .then((serveUrl) =>
+                selectComposition({
+                  serveUrl,
+                  id: 'HouseTour',
+                  inputProps: { project: absoluteProject },
+                  browserExecutable,
+                }).then((composition) => ({ serveUrl, composition })),
+              )
+              .then(({ serveUrl, composition }) =>
+                segments.reduce(
+                  (chain, segment, index) =>
+                    chain.then(() => {
+                      if (cached.has(segment.key)) {
+                        job.progress = ((index + 1) / segments.length) * 0.95;
+                        job.message = `复用缓存：${segment.label}`;
+                        return;
+                      }
+                      const paths = segmentPaths(segment);
+                      return renderMedia({
+                        ...RENDER_CACHE_LIMITS,
+                        offthreadVideoThreads: 1,
+                        serveUrl,
+                        composition,
+                        inputProps: { project: absoluteProject },
+                        codec: 'h264',
+                        x264Preset: 'veryfast',
+                        audioCodec: 'pcm-16',
+                        separateAudioTo: paths.audio,
+                        sampleRate: 48000,
+                        pixelFormat: 'yuv420p',
+                        crf: 20,
+                        concurrency: 1,
+                        outputLocation: paths.video,
+                        frameRange: [segment.start, segment.end],
+                        browserExecutable,
+                        timeoutInMilliseconds: 60_000,
+                        onProgress: ({ progress }) => {
+                          job.progress =
+                            ((index + progress) / segments.length) * 0.95;
+                          job.message = `本地更新 ${segment.label} · ${Math.round(progress * 100)}%（复用${job.cache!.reused}段）`;
+                        },
+                      }).then(() => {
+                        commitSegment(segment);
+                        job.cache!.rendered += 1;
+                        persistJob(job);
+                      });
+                    }),
+                  Promise.resolve(),
+                ),
+              );
+      },
+    );
+  });
   preparation
     .then(() => {
       job.message = '正在本地拼接缓存片段，不调用付费模型…';
       job.progress = 0.96;
       writeFileSync(
-        resolve(DATA, 'jobs', `${job.id}-segments.json`),
+        resolve(workspaceDirectory('jobs'), `${job.id}-segments.json`),
         JSON.stringify({ segments, cache: job.cache }, null, 2),
       );
-      const output = resolve(EXPORTS, `${job.id}.part.mp4`);
+      const output = resolve(
+        workspaceDirectory('exports'),
+        `${job.id}.part.mp4`,
+      );
       return concatenateSegments({ segments, id: job.id, output }).then(() =>
-        renameSync(output, resolve(EXPORTS, `${job.id}.mp4`)),
+        renameSync(
+          output,
+          resolve(workspaceDirectory('exports'), `${job.id}.mp4`),
+        ),
       );
     })
     .then(() => {
@@ -227,8 +294,13 @@ export function createJob(project: Project, origin: string): RenderJob {
       console.error('[render]', job.id, error);
     })
     .finally(() => {
-      persistJob(job);
-      activeJob = null;
+      try {
+        persistJob(job);
+      } finally {
+        jobState().activeJob = null;
+        releaseStorage();
+        release?.();
+      }
     });
   return { ...job };
 }

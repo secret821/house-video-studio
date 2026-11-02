@@ -1,4 +1,5 @@
 /** File trust boundary: normalize images, inspect audio and resolve only owned assets. */
+import { workspaceDirectory } from './workspace';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
@@ -35,10 +36,13 @@ export class HttpError extends Error {
 export function resolveAsset(src: string): string {
   const safe = mediaPathSchema.parse(src);
   const path = safe.startsWith('/media/')
-    ? resolve(UPLOADS, basename(safe))
+    ? resolve(workspaceDirectory('uploads'), basename(safe))
     : resolve(ROOT, 'public/demo', basename(safe));
   if (!existsSync(path))
-    throw new HttpError(400, '素材不存在，请重新上传或重新载入演示房源。');
+    throw new HttpError(
+      400,
+      '临时素材不存在或已过期，请重新上传或重新载入演示房源。',
+    );
   return path;
 }
 
@@ -94,7 +98,7 @@ export function saveImage(file: Express.Multer.File) {
           withoutEnlargement: true,
         })
         .jpeg({ quality: 90 })
-        .toFile(resolve(UPLOADS, name));
+        .toFile(resolve(workspaceDirectory('uploads'), name));
     })
     .then(() => ({
       src: `/media/${name}`,
@@ -126,33 +130,5 @@ export function inspectAudio(
     .catch((error: unknown) => {
       if (existsSync(path)) unlinkSync(path);
       throw error;
-    });
-}
-
-/** macOS speech is local and shell-free; no account or paid API is required. */
-export function synthesizeSpeech(
-  text: string,
-  rate = 190,
-): Promise<AudioAsset> {
-  if (process.platform !== 'darwin')
-    return Promise.reject(
-      new HttpError(422, '本机中文配音需要 macOS；也可上传自己的解说录音。'),
-    );
-  const id = randomUUID();
-  const aiff = resolve(UPLOADS, `${id}.aiff`);
-  const wav = resolve(UPLOADS, `${id}.wav`);
-  return runFile(
-    '/usr/bin/say',
-    ['-v', 'Tingting', '-r', String(rate), '-o', aiff, '--', text],
-    { timeout: 120_000 },
-  )
-    .then(() =>
-      runFile('/usr/bin/afconvert', ['-f', 'WAVE', '-d', 'LEI16', aiff, wav], {
-        timeout: 30_000,
-      }),
-    )
-    .then(() => inspectAudio(wav, { name: '普通话解说', text }))
-    .finally(() => {
-      if (existsSync(aiff)) unlinkSync(aiff);
     });
 }

@@ -20,6 +20,7 @@ import {
 } from '../services/definition/project';
 
 import { getCaptionLines, getTimeline } from './timeline';
+import { VideoWatermark } from './video-watermark';
 
 /** Only the moving image subscribes to every frame; crop protects the image edges. */
 function MotionPhoto({ scene, frames }: { scene: Scene; frames: number }) {
@@ -100,7 +101,7 @@ function PhotoScene({
   frames: number;
   captions: boolean;
 }) {
-  const { fps, width } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <MotionPhoto scene={scene} frames={frames} />
@@ -114,8 +115,9 @@ function PhotoScene({
         style={{
           position: 'absolute',
           left: '8%',
-          top: '22%',
-          fontSize: width * 0.078,
+          right: '8%',
+          top: width > height ? '42%' : '22%',
+          fontSize: Math.min(width, height) * 0.078,
           fontWeight: 600,
           color: 'white',
           letterSpacing: 2,
@@ -135,7 +137,7 @@ function PhotoScene({
 
 /** This is the single video template used by both the web Player and MP4 renderer. */
 function PhotoTour({ project }: { project: Project }) {
-  const { width } = useVideoConfig();
+  const { width, height } = useVideoConfig();
   const timeline = getTimeline(project);
   const facts = [project.area, project.layout, project.price]
     .filter(Boolean)
@@ -172,7 +174,10 @@ function PhotoTour({ project }: { project: Project }) {
       <div
         style={{
           position: 'absolute',
-          top: '7%',
+          // Landscape titles need a separate row beneath the shared upper-left watermark.
+          top: project.watermark.trim()
+            ? Math.max(height * 0.07, Math.min(width, height) * 0.12)
+            : height * 0.07,
           left: '8%',
           right: '8%',
           color: 'white',
@@ -180,7 +185,7 @@ function PhotoTour({ project }: { project: Project }) {
       >
         <div
           style={{
-            fontSize: width * 0.025,
+            fontSize: Math.min(width, height) * 0.025,
             letterSpacing: 5,
             marginBottom: 16,
           }}
@@ -189,7 +194,7 @@ function PhotoTour({ project }: { project: Project }) {
         </div>
         <div
           style={{
-            fontSize: width * 0.058,
+            fontSize: Math.min(width, height) * 0.058,
             fontWeight: 600,
             lineHeight: 1.4,
             overflowWrap: 'anywhere',
@@ -197,7 +202,13 @@ function PhotoTour({ project }: { project: Project }) {
         >
           {project.name}
         </div>
-        <div style={{ fontSize: width * 0.03, marginTop: 14, opacity: 0.9 }}>
+        <div
+          style={{
+            fontSize: Math.min(width, height) * 0.03,
+            marginTop: 14,
+            opacity: 0.9,
+          }}
+        >
           {project.location}
         </div>
       </div>
@@ -320,6 +331,7 @@ export function HouseTour({ project }: { project: Project }) {
       {project.music && (
         <Audio src={project.music.src} volume={project.musicVolume} loop />
       )}
+      <VideoWatermark text={project.watermark} />
     </AbsoluteFill>
   );
 }

@@ -1,0 +1,107 @@
+/** Ordered house media supports handle dragging and explicit buttons for keyboard and assistive access. */
+import { Button } from 'antd';
+import clsx from 'clsx';
+import { HolderOutlined } from '@ant-design/icons';
+import { useId } from 'react';
+
+import { HouseMediaKind } from '@/services/definition/video-edit';
+
+import { useMaterialSort } from './use-material-sort';
+import type { useVideoEdit } from './use-video-edit';
+
+/** Keep the recorded opening fixed; house materials and their matching shots move as one group. */
+export function MaterialOrderList({
+  editor,
+}: {
+  editor: ReturnType<typeof useVideoEdit>;
+}) {
+  const sort = useMaterialSort(editor);
+  const hint = useId();
+  const { materials, busy } = editor;
+  if (!materials.length) return null;
+  return (
+    <div className="mt-4">
+      <p id={hint} className="mb-3 text-xs text-muted">
+        拖手柄排序，也可用上下方向键调整
+      </p>
+      <ol
+        ref={sort.list}
+        className="studio-material-list"
+        aria-label="房屋素材顺序"
+      >
+        {materials.map((source, index) => {
+          const image = source.kind === HouseMediaKind.Image;
+          const name = image ? source.name : source.video.name;
+          const dragging = sort.drag?.id === source.id;
+          const target = sort.drag && !dragging && sort.drag.target === index;
+          return (
+            <li
+              key={source.id}
+              data-material-id={source.id}
+              className={clsx('studio-sort-row', {
+                'studio-sort-row-dragging': dragging,
+                'studio-sort-row-target': target,
+              })}
+            >
+              <div className="flex min-w-0 items-center gap-3">
+                <Button
+                  className="island-action studio-drag-handle"
+                  aria-label={`拖动排序素材${index + 1}`}
+                  aria-describedby={hint}
+                  disabled={busy || materials.length < 2}
+                  onPointerDown={(event) => sort.startDrag(event, index)}
+                  onPointerMove={sort.moveDrag}
+                  onPointerUp={() => sort.finishDrag(true)}
+                  onPointerCancel={() => sort.finishDrag(false)}
+                  onLostPointerCapture={() => sort.finishDrag(false)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Escape') sort.finishDrag(false);
+                    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                      event.preventDefault();
+                      sort.moveWithKeyboard(
+                        index,
+                        event.key === 'ArrowUp' ? -1 : 1,
+                      );
+                    }
+                  }}
+                >
+                  <HolderOutlined aria-hidden="true" />
+                </Button>
+                <img
+                  src={image ? source.src : source.video.poster}
+                  alt={`房屋素材${index + 1}`}
+                  className="h-20 w-14 shrink-0 rounded-lg object-cover"
+                  draggable={false}
+                />
+                <p className="min-w-0 text-sm break-words text-body">
+                  {index + 1}. {name}
+                  <span className="block text-xs text-muted">
+                    {image
+                      ? '照片'
+                      : `视频 · ${source.video.duration.toFixed(1)}秒`}
+                  </span>
+                </p>
+              </div>
+              {target && (
+                <p className="studio-drop-hint">松开移到第{index + 1}位</p>
+              )}
+              <div className="mt-3 flex justify-end">
+                <Button
+                  className="island-action"
+                  aria-label={`移除素材${index + 1}`}
+                  disabled={busy || Boolean(sort.drag)}
+                  onClick={() => editor.removeMaterial(source.id)}
+                >
+                  移除
+                </Button>
+              </div>
+            </li>
+          );
+        })}
+      </ol>
+      <p className="sr-only" role="status" aria-live="polite">
+        {sort.announcement}
+      </p>
+    </div>
+  );
+}

@@ -1,0 +1,27 @@
+# Allow-list the build context: local media, credentials, models and macOS binaries never enter the builder.
+**
+!Dockerfile
+!package.json
+!pnpm-lock.yaml
+!tsconfig.json
+!next-env.d.ts
+!next.config.mjs
+!postcss.config.mjs
+!src/
+!src/**
+!server/
+!server/**
+!scripts/
+!scripts/**
+!public/
+!public/**
+!deploy/
+!deploy/docker/
+!deploy/docker/entrypoint.sh
+**/__pycache__/
+**/._*
+**/.DS_Store
+**/*.pyc
+**/.env*
+**/*.log
+**/*.test.ts

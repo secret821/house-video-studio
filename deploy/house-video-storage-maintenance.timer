@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily House Video Studio storage maintenance
+
+[Timer]
+OnCalendar=*-*-* 04:30:00 Asia/Shanghai
+RandomizedDelaySec=10m
+Persistent=true
+Unit=house-video-storage-maintenance.service
+
+[Install]
+WantedBy=timers.target

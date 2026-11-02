@@ -1,0 +1,18 @@
+[Unit]
+Description=House Video Studio completed acceptance artifact retention
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/house-video-studio
+ExecStart=/opt/house-video-studio/runtime/node22/bin/node --experimental-strip-types /opt/house-video-studio/maintenance/storage-maintenance.ts --root /opt/house-video-studio --apply
+UMask=0077
+Nice=19
+IOSchedulingClass=idle
+MemoryMax=128M
+CPUQuota=20%
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ReadWritePaths=/opt/house-video-studio
+ProtectHome=true

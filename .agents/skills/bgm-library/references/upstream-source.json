@@ -1,0 +1,15 @@
+{
+  "repository": "https://github.com/TeamWiseFlow/xiaobei",
+  "commit": "47aea0be00db5f86e27615224e45e558d737d9ee",
+  "path": "skills/bgm-library",
+  "usage": "Project-local maintenance reference only; no upstream executables in production",
+  "files": {
+    "LICENSE": "b941d5e985b43ed26455d4a5363003b06fc17c63d818b0383956c165afb0b477",
+    "bgm-library.sh": "0343ca9773883c5ba57ac12f38af81e43a0952f471f8f9cde086928630de811e",
+    "package.json": "e997a861952f5c7f661996de0f9b8f860d4611050f75bede0cd4d7cc105180e3",
+    "SKILL.md": "e0e5029d1d7b9a08e34c4341a6e196ecdc53471d8892317e57d245a7b1703651",
+    "references/upstream-SKILL.md": "e0e5029d1d7b9a08e34c4341a6e196ecdc53471d8892317e57d245a7b1703651",
+    "scripts/bgm.js": "9420472696c1a06101845d2a9e7b91cf74dce91c0c97ee16a194abb3a3753092",
+    "scripts/downloader.js": "cc69bf9b82cde65294d47e25fad4a0189cab34a6c4a4a7e9023d7830a3b48d3b"
+  }
+}

@@ -1,18 +1,26 @@
-/** Original offline felt-piano texture: synthesized oscillators, no third-party song or audio samples. */
-import { existsSync, writeFileSync, renameSync } from 'node:fs';
+/** Original offline arrangements: synthesized oscillators, no third-party songs or samples. */
+import { workspaceDirectory, sharedWorkspaceDirectory } from './workspace';
+import {
+  existsSync,
+  writeFileSync,
+  renameSync,
+  copyFileSync,
+  statSync,
+} from 'node:fs';
+import { reserveStorage } from './storage-capacity';
 import { resolve } from 'node:path';
 
 import { type AudioAsset } from '../src/services/definition/project';
-
-import { UPLOADS } from './media';
+import { MusicTrack, MUSIC_TRACK_MAP } from '../src/services/definition/music';
 
 const SAMPLE_RATE = 44100;
 const MUSIC_SECONDS = 64;
 
-/** A warm four-chord arrangement with damped harmonics and quiet stereo echoes. */
-export function getOriginalMusic(): AudioAsset {
-  const name = 'original-felt-piano-v1.wav';
-  const path = resolve(UPLOADS, name);
+/** The omitted choice keeps the original piano and old drafts byte-for-byte compatible. */
+export function getOriginalMusic(track = MusicTrack.Piano): AudioAsset {
+  const { filename: name } = MUSIC_TRACK_MAP[track];
+  const path = resolve(sharedWorkspaceDirectory('music'), name);
+  const ownedPath = resolve(workspaceDirectory('uploads'), name);
   if (!existsSync(path)) {
     const frames = SAMPLE_RATE * MUSIC_SECONDS;
     const left = new Float32Array(frames);
@@ -33,8 +41,8 @@ export function getOriginalMusic(): AudioAsset {
         index += 1
       ) {
         const time = index / SAMPLE_RATE;
-        const attack = 1 - Math.exp(-time * 55);
-        const tone =
+        let attack = 1 - Math.exp(-time * 55);
+        let tone =
           Math.sin(2 * Math.PI * frequency * time) * Math.exp(-time * 1.25) +
           0.24 *
             Math.sin(2 * Math.PI * frequency * 2.001 * time) *
@@ -42,18 +50,79 @@ export function getOriginalMusic(): AudioAsset {
           0.07 *
             Math.sin(2 * Math.PI * frequency * 3 * time) *
             Math.exp(-time * 4);
+        if (track === MusicTrack.Pluck) {
+          tone =
+            (Math.sin(2 * Math.PI * frequency * time) +
+              0.45 * Math.sin(2 * Math.PI * frequency * 2 * time) +
+              0.18 * Math.sin(2 * Math.PI * frequency * 3 * time)) *
+            Math.exp(-time * 3.6);
+        } else if (track === MusicTrack.Lounge) {
+          tone =
+            Math.sin(
+              2 * Math.PI * frequency * time +
+                1.1 *
+                  Math.sin(2 * Math.PI * frequency * 2 * time) *
+                  Math.exp(-time * 3),
+            ) * Math.exp(-time * 1.8);
+        } else if (track === MusicTrack.Ambient) {
+          attack = 1 - Math.exp(-time * 1.6);
+          tone =
+            (Math.sin(2 * Math.PI * frequency * time) +
+              0.25 * Math.sin(2 * Math.PI * frequency * 1.003 * time)) *
+            Math.exp(-time * 0.8);
+        } else if (track === MusicTrack.Bells) {
+          tone =
+            Math.sin(2 * Math.PI * frequency * time) * Math.exp(-time * 1.4) +
+            0.3 *
+              Math.sin(2 * Math.PI * frequency * 2.76 * time) *
+              Math.exp(-time * 2.8) +
+            0.12 *
+              Math.sin(2 * Math.PI * frequency * 5.4 * time) *
+              Math.exp(-time * 4);
+        }
         const value = gain * attack * tone;
         left[offset + index] += value * Math.sqrt((1 - pan) / 2);
         right[offset + index] += value * Math.sqrt((1 + pan) / 2);
       }
     }
-    for (let bar = 0; bar < 16; bar += 1) {
+    const arrangements = {
+      [MusicTrack.Piano]: {
+        barSeconds: 4,
+        transpose: 0,
+        steps: [2, 4, 3, 5, 4, 3, 4, 2],
+      },
+      [MusicTrack.Pluck]: {
+        barSeconds: 3.2,
+        transpose: 7,
+        steps: [2, 3, 4, 3, 5, 4, 3, 4],
+      },
+      [MusicTrack.Lounge]: {
+        barSeconds: 4,
+        transpose: 0,
+        steps: [2, 4, 3, 4, 5, 3],
+      },
+      [MusicTrack.Ambient]: {
+        barSeconds: 8,
+        transpose: 0,
+        steps: [2, 3, 4, 5],
+      },
+      [MusicTrack.Bells]: {
+        barSeconds: 6.4,
+        transpose: 12,
+        steps: [2, 4, 3, 5],
+      },
+    };
+    const arrangement = arrangements[track];
+    for (let bar = 0; bar * arrangement.barSeconds < MUSIC_SECONDS; bar += 1) {
       const chord = chords[bar % chords.length];
-      note(chord[0], bar * 4, 0.19, -0.12);
-      [2, 4, 3, 5, 4, 3, 4, 2].forEach((degree, step) =>
+      const start = bar * arrangement.barSeconds;
+      note(chord[0], start, 0.19, -0.12);
+      arrangement.steps.forEach((degree, step) =>
         note(
-          chord[degree],
-          bar * 4 + step * 0.5 + 0.03,
+          chord[degree] + arrangement.transpose,
+          start +
+            (step * arrangement.barSeconds) / arrangement.steps.length +
+            0.03,
           0.105 * (step % 2 ? 0.8 : 1),
           step % 2 ? 0.32 : -0.28,
         ),
@@ -102,10 +171,18 @@ export function getOriginalMusic(): AudioAsset {
     writeFileSync(`${path}.tmp`, bytes);
     renameSync(`${path}.tmp`, path);
   }
+  if (!existsSync(ownedPath)) {
+    const release = reserveStorage(statSync(path).size);
+    try {
+      copyFileSync(path, ownedPath);
+    } finally {
+      release();
+    }
+  }
   return {
     src: `/media/${name}`,
     duration: MUSIC_SECONDS,
-    name: '原创轻钢琴 · Warm Interior',
+    name: MUSIC_TRACK_MAP[track].name,
     text: null,
   };
 }

@@ -1,11 +1,18 @@
 /** Loopback editor with server-only Bailian calls and locally stored media/results. */
+import {
+  workspaceDirectory,
+  workspaceState,
+  startWorkspaceCleanup,
+  TEMPORARY_MEDIA,
+} from './workspace';
 import express from 'express';
 import multer from 'multer';
 import nextApp from 'next';
 import { randomUUID } from 'node:crypto';
-import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
+import { VIDEO_UPLOAD_TIMEOUT_MS } from '../src/services/definition/video-upload';
 
 import {
   JobStatus,
@@ -16,14 +23,10 @@ import {
 
 import { DEMO_PROJECT } from './demo';
 import {
-  DATA,
-  EXPORTS,
   ROOT,
-  UPLOADS,
   HttpError,
   inspectAudio,
   saveImage,
-  synthesizeSpeech,
   resolveAsset,
   validateAssets,
 } from './media';
@@ -37,29 +40,45 @@ import {
 import { cloudSpeech, getCloudStatus, withCloudLock } from './cloud';
 
 import { videoEditRouter, getLatestVideoEditJob } from './video-edit';
+import { getVideoUploadStatus } from './video-upload';
+import { acquireMediaSlot } from './media-queue';
+import { getLocalSpeechCapability, synthesizeSpeech } from './local-speech';
+import { getOriginalMusic } from './video-edit-music';
+import { MusicTrack } from '../src/services/definition/music';
 
 import { copyRouter } from './copy';
+import { musicRouter, musicPreviewRouter } from './music-library';
+import { subtitlesRouter } from './subtitles';
+import { smartCleanRouter } from './smart-clean';
+import { getAccessPolicy } from './access-policy';
+import { installWorkspaceAuth, loadAuthCredentials } from './auth';
+import { reserveStorage, storageLimits, MIB } from './storage-capacity';
+
+storageLimits();
 
 const app = express();
-const port = Number(process.env.PORT || 4317);
+const port = Number(process.env.PORT || 4318);
 const origin = `http://127.0.0.1:${port}`;
-const allowedHosts = new Set([`127.0.0.1:${port}`, `localhost:${port}`]);
-let speechBusy = false;
+const access = getAccessPolicy(port, process.env.PUBLIC_ORIGIN);
+if (process.env.PUBLIC_ORIGIN && !TEMPORARY_MEDIA)
+  throw new Error(
+    '公网工作室必须启用STUDIO_TEMPORARY_MEDIA=1，业务文件仅临时保存。',
+  );
+const speechState = () => workspaceState('speech', () => ({ busy: false }));
 
 // Host and Origin checks protect loopback file-writing endpoints from cross-site requests.
 app.use((req, res, next) => {
-  if (!allowedHosts.has(req.headers.host ?? ''))
+  if (!access.hosts.has(req.headers.host ?? ''))
     return next(new HttpError(403, '仅允许本机访问。'));
   const requestOrigin = req.headers.origin;
-  if (
-    requestOrigin &&
-    ![origin, `http://localhost:${port}`].includes(requestOrigin)
-  ) {
+  if (requestOrigin && !access.origins.has(requestOrigin)) {
     // Remotion serves its composition on a separate ephemeral loopback port.
     // Only read-only media requests get this exception; API mutations stay same-origin.
     const rendererMedia =
       /^(GET|HEAD)$/.test(req.method) &&
-      /^\/(media|demo)\//.test(req.path) &&
+      /^\/(?:_workspace\/(?:legacy|[a-f0-9-]{36})\/)?(media|demo)\//.test(
+        req.path,
+      ) &&
       /^http:\/\/(localhost|127\.0\.0\.1):\d+$/.test(requestOrigin);
     if (!rendererMedia) return next(new HttpError(403, '不允许跨站请求。'));
     res.setHeader('Access-Control-Allow-Origin', requestOrigin);
@@ -67,28 +86,54 @@ app.use((req, res, next) => {
   }
   next();
 });
-app.use(express.json({ limit: '256kb' }));
-app.use('/media', express.static(UPLOADS, { dotfiles: 'deny' }));
-app.use('/demo', express.static(resolve(ROOT, 'public/demo')));
-app.use('/exports', express.static(EXPORTS));
-
-app.use('/api/video-edit/create-render-job', (_req, _res, next) => {
-  if (
-    getLatestJob()?.status === JobStatus.Rendering ||
-    getLatestOpeningJob()?.status === JobStatus.Rendering
-  )
-    return next(new HttpError(409, '请等待当前照片或口播任务完成。'));
-  next();
+if (process.env.PUBLIC_ORIGIN && !process.env.STUDIO_SESSION_STORE)
+  throw new Error('公网服务必须配置STUDIO_SESSION_STORE以保留7天登录状态。');
+installWorkspaceAuth(app, {
+  credentials: loadAuthCredentials(
+    process.env.STUDIO_AUTH_CONFIG,
+    process.env.PUBLIC_ORIGIN,
+  ),
+  publicOrigin: process.env.PUBLIC_ORIGIN,
+  sessionStorePath: process.env.STUDIO_SESSION_STORE,
+  port,
 });
+// Timed captions can exceed the small metadata body; scope the larger bounded JSON parser to video export.
+app.use('/api/video-edit/create-render-job', express.json({ limit: '2mb' }));
+app.use(express.json({ limit: '256kb' }));
+app.use('/media', (req, res, next) =>
+  express.static(workspaceDirectory('uploads'), {
+    dotfiles: 'deny',
+    index: false,
+  })(req, res, next),
+);
+app.use('/demo', express.static(resolve(ROOT, 'public/demo')));
+app.use('/exports', (req, res, next) =>
+  express.static(workspaceDirectory('exports'), {
+    dotfiles: 'deny',
+    index: false,
+  })(req, res, next),
+);
+
+app.use(
+  ['/api/video-edit/create-render-job', '/api/video-edit/upload-video'],
+  (_req, _res, next) => {
+    if (
+      getLatestJob()?.status === JobStatus.Rendering ||
+      getLatestOpeningJob()?.status === JobStatus.Rendering
+    )
+      return next(new HttpError(409, '请等待当前照片或口播任务完成。'));
+    next();
+  },
+);
 app.use('/api/video-edit', videoEditRouter);
 app.use('/api/copy', copyRouter);
+app.use('/api/music', musicRouter);
+app.use('/music-preview', musicPreviewRouter);
+app.use('/api/subtitles', subtitlesRouter);
+app.use('/api/smart-clean', smartCleanRouter);
 
 app.get('/api/get-capabilities', (_req, res) =>
-  res.json({
-    localSpeechReady: process.platform === 'darwin',
-    speechReady: getCloudStatus().speechReady,
-    speechMessage: getCloudStatus().speechMessage,
-  }),
+  res.json(getLocalSpeechCapability()),
 );
 app.get('/api/get-cloud-status', (_req, res) => res.json(getCloudStatus()));
 app.post('/api/generate-opening-speech', (req, res, next) => {
@@ -107,6 +152,7 @@ app.get('/api/get-latest-opening-job', (_req, res) =>
 );
 app.post('/api/create-opening-job', (req, res) => {
   if (
+    getVideoUploadStatus().active ||
     getLatestJob()?.status === JobStatus.Rendering ||
     getLatestVideoEditJob()?.status === JobStatus.Rendering
   )
@@ -118,34 +164,56 @@ app.get('/api/get-opening-job/:id', (req, res) =>
 );
 app.get('/api/get-demo', (_req, res) => res.json(DEMO_PROJECT));
 app.get('/api/get-latest-render-job', (_req, res) => res.json(getLatestJob()));
-app.get('/api/get-draft', (_req, res) => {
-  const path = resolve(DATA, 'draft.json');
-  res.json(
-    existsSync(path)
-      ? projectSchema.parse(JSON.parse(readFileSync(path, 'utf8')))
-      : null,
-  );
-});
-app.post('/api/save-draft', (req, res) => {
-  const project = projectSchema.parse(req.body);
-  const path = resolve(DATA, 'draft.json');
-  writeFileSync(`${path}.tmp`, JSON.stringify(project, null, 2));
-  renameSync(`${path}.tmp`, path);
-  res.json({ saved: true });
-});
+app.get('/api/get-draft', (_req, res) => res.json(null));
+app.post('/api/save-draft', (_req, res) =>
+  res
+    .status(410)
+    .json({ message: '草稿改为仅存当前浏览器，请刷新页面后保存。' }),
+);
 const imageUpload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 20 * 1024 * 1024, files: 1 },
 });
-app.post('/api/upload-image', imageUpload.single('file'), (req, res, next) => {
-  if (!req.file) return next(new HttpError(400, '请选择图片。'));
-  return saveImage(req.file)
-    .then((asset) => res.json(asset))
-    .catch(next);
+// Acquire before multipart buffering: a second account's 20MB image/Sharp decode must not compete with a running render.
+app.post('/api/upload-image', (req, res, next) => {
+  const releaseStorage = reserveStorage(40 * MIB);
+  const controller = new AbortController();
+  const disconnected = () => {
+    if (!res.writableFinished)
+      controller.abort(new HttpError(499, '图片上传连接已断开。'));
+  };
+  res.once('close', disconnected);
+  return acquireMediaSlot(controller.signal)
+    .then((release) => {
+      if (controller.signal.aborted || req.destroyed) {
+        release();
+        throw new HttpError(499, '图片上传连接已断开。');
+      }
+      return new Promise<void>((resolveUpload, reject) => {
+        imageUpload.single('file')(req, res, (error: unknown) => {
+          if (error) reject(error);
+          else resolveUpload();
+        });
+      })
+        .then(() => {
+          if (!req.file) throw new HttpError(400, '请选择图片。');
+          return saveImage(req.file);
+        })
+        .then((asset) => res.json(asset))
+        .finally(release);
+    })
+    .catch((error: unknown) => {
+      if (!res.destroyed) next(error);
+    })
+    .finally(() => {
+      res.off('close', disconnected);
+      releaseStorage();
+    });
 });
 const audioUpload = multer({
   storage: multer.diskStorage({
-    destination: UPLOADS,
+    destination: (_req, _file, done) =>
+      done(null, workspaceDirectory('uploads')),
     filename: (_req, file, done) => {
       const extension = file.originalname.split('.').pop()?.toLowerCase();
       if (!extension || !['wav', 'mp3', 'm4a', 'ogg'].includes(extension))
@@ -158,23 +226,35 @@ const audioUpload = multer({
   }),
   limits: { fileSize: 50 * 1024 * 1024, files: 1 },
 });
-app.post('/api/upload-audio', audioUpload.single('file'), (req, res, next) => {
-  if (!req.file) return next(new HttpError(400, '请选择音频。'));
-  return inspectAudio(req.file.path, {
-    name: req.file.originalname,
-    text: null,
+app.post('/api/upload-audio', (req, res, next) => {
+  const releaseStorage = reserveStorage(50 * MIB);
+  return new Promise<void>((resolveUpload, reject) => {
+    audioUpload.single('file')(req, res, (error: unknown) => {
+      if (error) reject(error);
+      else resolveUpload();
+    });
   })
+    .then(() => {
+      if (!req.file) throw new HttpError(400, '请选择音频。');
+      return inspectAudio(req.file.path, {
+        name: req.file.originalname,
+        text: null,
+      });
+    })
     .then((asset) => res.json(asset))
-    .catch(next);
+    .catch(next)
+    .finally(releaseStorage);
 });
 app.post('/api/generate-narration', (req, res, next) => {
-  if (speechBusy) return next(new HttpError(409, '配音正在生成，请稍候。'));
+  if (speechState().busy)
+    return next(new HttpError(409, '配音正在生成，请稍候。'));
   const scenes = z.array(sceneSchema).min(1).max(20).parse(req.body);
-  speechBusy = true;
-  // Serial cloud synthesis bounds concurrent calls and retains each completed result in the ledger.
+  scenes.forEach((scene) => resolveAsset(scene.src));
+  speechState().busy = true;
+  // Serial offline synthesis preserves matching audio and bounds memory on the small server.
   const output = new Map<string, ReturnType<typeof sceneSchema.parse>>();
-  return withCloudLock(() =>
-    scenes.reduce(
+  return scenes
+    .reduce(
       (chain, scene) =>
         chain.then(() => {
           if (
@@ -190,34 +270,37 @@ app.post('/api/generate-narration', (req, res, next) => {
             output.set(scene.id, { ...scene, voiceover: null });
             return;
           }
-          return cloudSpeech(scene.narration, 'Cherry').then((voiceover) => {
+          resolveAsset(scene.src);
+          return synthesizeSpeech(scene.narration).then((voiceover) => {
             output.set(scene.id, { ...scene, voiceover });
           });
         }),
       Promise.resolve(),
-    ),
-  )
+    )
     .then(() => res.json(scenes.map((scene) => output.get(scene.id))))
     .catch(next)
     .finally(() => {
-      speechBusy = false;
+      speechState().busy = false;
     });
 });
 app.post('/api/generate-local-narration', (req, res, next) => {
-  if (speechBusy) return next(new HttpError(409, '配音正在生成，请稍候。'));
+  if (speechState().busy)
+    return next(new HttpError(409, '配音正在生成，请稍候。'));
   const scene = sceneSchema.parse(req.body);
   resolveAsset(scene.src);
   if (!scene.narration.trim())
     throw new HttpError(400, '请先填写当前图片的解说文案。');
-  speechBusy = true;
+  speechState().busy = true;
   return synthesizeSpeech(scene.narration)
     .then((voiceover) => res.json({ ...scene, voiceover }))
     .catch(next)
     .finally(() => {
-      speechBusy = false;
+      speechState().busy = false;
     });
 });
 app.post('/api/create-render-job', (req, res) => {
+  if (getVideoUploadStatus().active)
+    throw new HttpError(409, '请先等待或取消当前视频上传。');
   if (getLatestOpeningJob()?.status === JobStatus.Rendering)
     throw new HttpError(409, '请等待人物开场生成完成后再导出视频。');
   if (getLatestVideoEditJob()?.status === JobStatus.Rendering)
@@ -249,6 +332,9 @@ function startApp() {
 
 startApp()
   .then(() => {
+    // Generate the immutable score once before accepting media work; account copies do not allocate synthesis buffers.
+    Object.values(MusicTrack).forEach((track) => getOriginalMusic(track));
+    startWorkspaceCleanup();
     app.use(
       (
         error: unknown,
@@ -272,7 +358,7 @@ startApp()
         res.status(status).json({ message });
       },
     );
-    app
+    const server = app
       .listen(port, '127.0.0.1', () =>
         console.info(`房源视频工作室已启动：${origin}`),
       )
@@ -280,6 +366,8 @@ startApp()
         console.error('本地服务启动失败：', error.message);
         process.exit(1);
       });
+    // Keep Node's request deadline beyond the per-upload cancellation and cleanup deadline.
+    server.requestTimeout = VIDEO_UPLOAD_TIMEOUT_MS + 30_000;
   })
   .catch((error: unknown) => {
     console.error(error);

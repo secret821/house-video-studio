@@ -11,3 +11,9 @@ data/
 .next/
 *.tsbuildinfo
 .next-dev/
+.video-bundles/
+.runtime/
+artifacts/
+__pycache__/
+*.pyc
+._*

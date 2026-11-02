@@ -1,4 +1,4 @@
-/** Real API-to-MP4 acceptance. Set VERIFY_JOB to inspect a job exported from the browser. */
+/** Real API-to-MP4 acceptance. VERIFY_JOB requires an explicitly exported browser draft in VERIFY_PROJECT. */
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { readFileSync, writeFileSync } from 'node:fs';
@@ -12,12 +12,12 @@ import {
   JobStatus,
   jobSchema,
   projectSchema,
+  sceneSchema,
   type Project,
 } from '../src/services/definition/project';
 import { getTimeline } from '../src/video/timeline';
-import { synthesizeSpeech } from '../server/media';
 
-const origin = process.env.VERIFY_ORIGIN || 'http://127.0.0.1:4317';
+const origin = process.env.VERIFY_ORIGIN || 'http://127.0.0.1:4318';
 const runFile = promisify(execFile);
 
 /** Keep HTTP failures explicit in the acceptance script as in the application. */
@@ -240,7 +240,15 @@ function inspectVideo(details: {
 }
 
 const source = process.env.VERIFY_JOB
-  ? request('get-draft')
+  ? Promise.resolve().then(() => {
+      if (!process.env.VERIFY_PROJECT)
+        throw new Error(
+          '草稿仅在浏览器保存；请用VERIFY_PROJECT指定导出的草稿JSON。',
+        );
+      return JSON.parse(
+        readFileSync(process.env.VERIFY_PROJECT, 'utf8'),
+      ) as unknown;
+    })
   : request('get-demo');
 source
   .then((body) => projectSchema.parse(body))
@@ -253,8 +261,8 @@ source
       .reduce(
         (chain, scene, index) =>
           chain.then(() =>
-            synthesizeSpeech(scene.narration).then((voiceover) => {
-              voiced.scenes[index] = { ...scene, voiceover };
+            request('generate-local-narration', scene).then((body) => {
+              voiced.scenes[index] = sceneSchema.parse(body);
             }),
           ),
         Promise.resolve(),

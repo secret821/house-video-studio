@@ -1,5 +1,7 @@
 /** Owns editor state, sequential uploads, speech generation and real job polling. */
+import { VIDEO_UPLOAD_MAX_BYTES } from '../../services/definition/video-upload';
 import { useEffect, useState } from 'react';
+import { createMediaId } from '../../services/definition/media-id';
 
 import {
   EMPTY_PROJECT,
@@ -11,10 +13,14 @@ import {
 } from '../../services/definition/project';
 
 import api from './api';
+import { musicApi } from './music-api';
+import type { MusicChoice } from '@/services/definition/music-library';
+import { useVideoUpload } from './use-video-upload';
 
 enum Work {
   Loading = '正在读取本机草稿…',
   Upload = '正在上传素材…',
+  Music = '正在准备背景音乐…',
   Speech = '正在生成中文解说…',
   Saving = '正在保存…',
   Starting = '正在提交导出…',
@@ -23,6 +29,7 @@ enum Work {
 
 /** The complete editor workflow stays local to the studio page. */
 export function useStudio() {
+  const upload = useVideoUpload();
   const [project, setProject] = useState<Project>(EMPTY_PROJECT);
   const [selectedId, setSelectedId] = useState('');
   const [work, setWork] = useState<Work | null>(Work.Loading);
@@ -31,13 +38,13 @@ export function useStudio() {
   const [speechCapability, setSpeechCapability] = useState({
     localSpeechReady: false,
     speechReady: false,
-    speechMessage: '正在检查百炼配音配置…',
+    speechMessage: '正在检查 Kokoro 本地配音…',
   });
   const selected =
     project.scenes.find((scene) => scene.id === selectedId) ??
     project.scenes[0];
   const rendering = job?.status === JobStatus.Rendering;
-  const busy = work !== null || rendering;
+  const busy = work !== null || rendering || upload.busy;
 
   /** Display failures rather than leaving rejected background work invisible. */
   function reportError(error: unknown) {
@@ -50,9 +57,14 @@ export function useStudio() {
   useEffect(() => {
     let active = true;
     Promise.all([api.getDraft(), api.getCapabilities(), api.getLatestRender()])
-      .then(([draft, capabilities, latest]) => {
+      .then(([{ project: draft, mediaExpired }, capabilities, latest]) => {
         if (!active) return;
         if (draft) setProject(draft);
+        if (mediaExpired)
+          setNotice({
+            text: '草稿文案已恢复，但临时素材已过期或服务已重启，请重新上传素材后生成。',
+            error: true,
+          });
         setSpeechCapability(capabilities);
         setJob(latest?.sessionId === draft?.sessionId ? latest : null);
       })
@@ -105,13 +117,13 @@ export function useStudio() {
   /** Attach a local video only after normalization succeeds; failed replacements retain the prior opening. */
   function addOpeningVideo(file: File | undefined) {
     if (!file) return;
-    if (file.size > 250 * 1024 * 1024) {
-      reportError(new Error('开场视频请控制在250MB以内。'));
+    if (file.size > VIDEO_UPLOAD_MAX_BYTES) {
+      reportError(new Error('开场视频请控制在1GB以内。'));
       return;
     }
     setWork(Work.Opening);
     setNotice({ text: '', error: false });
-    api
+    upload
       .uploadOpeningVideo(file)
       .then((opening) => {
         const completed = { ...project, opening };
@@ -153,7 +165,7 @@ export function useStudio() {
   }
 
   /** Sequential image uploads retain earlier successes if a later image fails. */
-  function addPhotos(files: FileList | null) {
+  function addPhotos(files: FileList | readonly File[] | null) {
     if (!files?.length) return;
     if (project.scenes.length + files.length > 20) {
       reportError(new Error('最多支持20个场景，请减少照片数量。'));
@@ -167,7 +179,7 @@ export function useStudio() {
             .then(() => api.uploadImage(file))
             .then((asset) => {
               const scene: Scene = {
-                id: crypto.randomUUID(),
+                id: createMediaId(),
                 src: asset.src,
                 title: file.name.replace(/\.[^.]+$/, '').slice(0, 32),
                 narration: '',
@@ -213,15 +225,13 @@ export function useStudio() {
       .finally(() => setWork(null));
   }
 
-  /** Only the selected scene is submitted; local synthesis never enters the cloud path. */
-  function generateSceneSpeech(local: boolean) {
+  /** Only the selected scene is submitted to offline Kokoro synthesis. */
+  function generateSceneSpeech() {
     if (!selected || !selected.narration.trim()) return;
     setWork(Work.Speech);
     setNotice({ text: '', error: false });
-    const pending = local
-      ? api.generateLocalNarration(selected)
-      : api.generateNarration([selected]).then((scenes) => scenes[0]);
-    pending
+    api
+      .generateLocalNarration(selected)
       .then((updated) => {
         const completed = {
           ...project,
@@ -234,9 +244,7 @@ export function useStudio() {
       })
       .then(() =>
         setNotice({
-          text: local
-            ? '当前图片已使用本机免费配音，其余配音和人物开场未重新生成。'
-            : '当前图片配音已就绪；相同内容使用缓存，其余配音和人物开场未重新生成。',
+          text: '当前图片 Kokoro 配音已就绪，其余配音和人物开场已保留。',
           error: false,
         }),
       )
@@ -245,6 +253,7 @@ export function useStudio() {
   }
 
   return {
+    upload,
     project,
     selected,
     busy,
@@ -255,7 +264,7 @@ export function useStudio() {
       const next = {
         ...EMPTY_PROJECT,
         name: '新房源视频',
-        sessionId: crypto.randomUUID(),
+        sessionId: createMediaId(),
       };
       setWork(Work.Saving);
       setNotice({ text: '', error: false });
@@ -266,7 +275,7 @@ export function useStudio() {
           setSelectedId('');
           setJob(null);
           setNotice({
-            text: '已新建空房源视频，草稿已保存。原始素材与历史成片保留。',
+            text: '已新建空房源视频，草稿已保存到当前浏览器。原始素材与历史成片保留。',
             error: false,
           });
         })
@@ -282,9 +291,21 @@ export function useStudio() {
     moveScene,
     addPhotos,
     addAudio,
+    selectMusic: (choice: MusicChoice, signal?: AbortSignal) => {
+      setWork(Work.Music);
+      return musicApi
+        .select(choice, signal)
+        .then((music) =>
+          setProject((current) => ({
+            ...current,
+            music,
+            musicVolume: current.musicVolume || EMPTY_PROJECT.musicVolume,
+          })),
+        )
+        .finally(() => setWork(null));
+    },
     exportVideo,
-    generateSelectedSpeech: () => generateSceneSpeech(false),
-    generateLocalSpeech: () => generateSceneSpeech(true),
+    generateLocalSpeech: generateSceneSpeech,
     removeScene: () => {
       if (selected)
         setProject({

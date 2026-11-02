@@ -33,7 +33,7 @@ const directory = resolve(DATA, 'house-tour-v2');
 const path = resolve(directory, 'project-bailian.json');
 const command = process.argv[2] ?? 'status';
 const voice = z.enum(CLOUD_VOICES).parse(process.argv[3] ?? 'Cherry');
-const origin = `http://127.0.0.1:${Number(process.env.PORT || 4317)}`;
+const origin = `http://127.0.0.1:${Number(process.env.PORT || 4318)}`;
 
 /** A completed step is reusable after failure; source photos and earlier project drafts remain separate. */
 function saveProject(project: Project) {

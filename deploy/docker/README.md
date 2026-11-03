@@ -1,6 +1,6 @@
 # Docker 部署
 
-面向新购的 Linux x86_64 服务器，推荐4核4GiB、一次执行一个重型媒体任务。购买页的Docker CE镜像只是预装Docker；本仓库的Dockerfile才负责构建房源视频应用。当前源码已加入 MySQL 账号和草稿数据源，但尚未切换正式服务或执行正式库迁移；现有线上镜像仍按下面的历史记录运行。新候选的建表、迁移和回滚见 [MySQL 接入说明](../mysql.md)。
+面向新购的 Linux x86_64 服务器，推荐4核4GiB、一次执行一个重型媒体任务。购买页的Docker CE镜像只是预装Docker；本仓库的Dockerfile才负责构建房源视频应用。2026-11-03 腾讯云新站已将提交 `36b73d9` 的完整版本与 MySQL 账号/草稿迁移一同切换，正式镜像为 `house-video-studio:20261103-full`。建表、迁移和回滚见 [MySQL 接入说明](../mysql.md)，本次验证见 [验收记录](../../docs/verification.md)。下方较早的候选与冻结镜像说明保留作历史记录。
 
 腾讯云新站为`http://106.54.221.18`，应用位于`/opt/house-video-studio-docker`，Compose管理单容器，宿主机Nginx代理到127.0.0.1:4340。2026-10-31已按用户要求迁移两个原账号并实际验证相同用户名/密码可登录，旧素材、成片、任务和登录记录未迁移，旧阿里云服务继续保留。迁移基线镜像`house-video-studio:20261031-migration-current`（SHA256 b1b3392e0ab60756d25e6a2e8a61b0fea41c7dff83fe55bc3f58c087856bf253）对应旧站正式watermark-subtitles版本，Next构建RlIPVLm_imjay0YYQFXuN。三份MP4、实际字幕识别/排队取消、水印抽帧、智能清理、隔离、重启登录与公网HTTP检查通过；候选峰值1298448384字节、无OOM，未据短样片承诺长片性能。浏览器自动化因来源权限被拒绝，不能声称页面交互验收完成。完整记录见[验证记录](../../docs/verification.md)。
 

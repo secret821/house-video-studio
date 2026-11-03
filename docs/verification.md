@@ -1,5 +1,11 @@
 # 验收记录
 
+## 腾讯云当前本地完整版发布（2026-11-03）
+
+- 用户要求将当前本地版本全部部署，而非仅 OCR 冻结版。正式镜像 `house-video-studio:20261103-full`，SHA256 `ad980648c45ec837f2813bc659a5a5d1df6a6df292229501cd9c5937f930a023`，源码提交 `36b73d98e5089a3e636c237dfb5c4662b069ef11`，Next 构建 `SF70XfT4HgIgcGbIO3R2_`。复用已验收的 Linux 媒体/OCR 运行时，放入该提交的全部源码、页面产物与重新构建的双视频包；新增生产依赖在 Linux 用锁文件安装。
+- 宿主机安装 MySQL 8.0.46，仅监听 127.0.0.1；独立库和应用账号仅授予本库 SELECT/INSERT/UPDATE。迁移只读预检为 3 个账号、0 份旧服务端草稿，导入后 3 个账号全部启用且 workspace ID 唯一，源认证文件未删除；会话目录继续挂载。切换前备份旧 Compose、环境、认证配置及 322 MiB 业务 data 归档到 `/opt/house-video-studio-docker/backups/full-local-20261103`；旧镜像保留。新服务启动后已接收原片迁入 `data/current`，旧临时任务/成片按重启规则清理。
+- 3 CPU/2560 MiB 隔离候选浏览器实际看到杂志留白、经典实拍模板并切换为杂志留白；OCR 就绪。候选实际导出经典和杂志留白原生、杂志留白混合素材浏览器、照片模式共 4 份 MP4，均 1080×1920、H.264/AAC；原生与混合片约 5.6 秒，照片片约 3 秒，证据位于 `artifacts/deploy-full-20261103`。候选无 OOM/重启。正式容器 healthy、无 OOM/重启，MySQL 唯一索引查询使用 `uniq_workspace_id`，OCR 自检就绪；公网匿名制作页 303 跳登录，登录页 200，匿名 API/media/exports 均 401。正式站的账号浏览器点击未完成，不将候选页面检查冒充正式站交互验收；本次没有重新验证长片性能。
+
 ## 腾讯云房源截图OCR发布（2026-11-03）
 
 - 用户明确要求将截图识别与文本段解析更新上线，并在获知重启会清理约1.29GB临时原片/成片后明确要求直接切换。冻结版从当时线上`20261103-opening-removal`镜像及源码叠加OCR范围，排除当前工作区的MySQL与其他未发布改动；最终镜像`house-video-studio:20261103-property-ocr`，SHA256 `6fe7fa56054ff20d8c94532df92a495dfc3c5871ec63f58ad8dc6081debbf37b`，Next `dl1lz77686aykzf_NBaHj7993837127`。

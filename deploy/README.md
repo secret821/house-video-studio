@@ -2,7 +2,7 @@
 
 腾讯云新站`http://106.54.221.18`的单容器部署、账号迁移与验收状态见 [Docker部署](docker/README.md)。旧阿里云systemd/宝塔服务继续保留，本页后续发布记录属于旧机；不得将新4核服务器的Compose限额套用到原2核2GiB机器，也不自动停止旧站。
 
-当前腾讯云正式版为2026-11-03 opening-removal，完整容量保护已随冻结版本上线；下文“本地候选”描述仅指旧机当时的历史状态。最新发布、回退与验证见Docker部署的当前运行版本。
+当前腾讯云正式版为 2026-11-03 完整本地版本 `house-video-studio:20261103-full`，包括两套模板、房源截图 OCR 与 MySQL 账号/草稿。下文“本地候选”描述仅指旧阿里云机器当时的历史状态。最新发布、回退与验证见 [Docker 部署](docker/README.md) 和 [验收记录](../docs/verification.md)。
 
 ## 磁盘维护
 
@@ -44,7 +44,7 @@
 
 Kokoro配音当前仅为本地候选，尚未发布。候选包须额外包含 `scripts/kokoro-inference.py`、`scripts/setup-kokoro.ts` 和 `scripts/kokoro-requirements.txt`。管理员准备Python 3.10～3.13，执行 `pnpm setup:kokoro`，用 `STUDIO_KOKORO_DIR` 指向独立持久目录，服务用户需有读取模型及写入词典缓存权限；模型不放入临时业务data。Linux仅安装CPU版PyTorch，不复制macOS虚拟环境。须在现有768MiB限制下完成中文单张/批量、视频排队、账号隔离和真实MP4候选验收并记录峰值/OOM后才能发布；本轮未提高资源上限。未安装或自检失败时配音禁用，原声和上传录音仍可使用。
 
-房源截图OCR同样仅为本地候选，尚未发布。若以后加入发布包，需包含 `scripts/property-ocr.py`、`scripts/setup-ocr.ts`、`scripts/ocr-requirements.txt` 和中文自检样本；Linux使用Python 3.10～3.13重新创建环境，可指定持久 `STUDIO_OCR_DIR`，执行 `pnpm setup:ocr` 完成离线自检。当前Baota发布清单不含OCR脚本和模型，按钮保持禁用；启用前须按整服务限制验收长截图、内存峰值及与媒体任务排队，不复制macOS虚拟环境。
+下述宝塔发布清单当时不含房源截图 OCR，旧阿里云站点仍不提供该功能。腾讯云 Docker 正式镜像现已包含 `scripts/property-ocr.py`、`scripts/setup-ocr.ts`、`scripts/ocr-requirements.txt` 及 Linux OCR 模型，中文离线自检、长截图与媒体排队的候选验收见 [验收记录](../docs/verification.md)。其他 Linux 环境须用 Python 3.10～3.13 重新安装并自检，不能复制 macOS 虚拟环境。
 
 本项目是按账号隔离的文件存储工具，不使用ImageForge数据库。发布目录为`/opt/house-video-studio/releases`，`current`指向当前版本；业务文件仅在`shared/data/temporary/session-*`按账号临时保存（2小时空闲清理，重启清空），私有百炼配置为`shared/.env.cloud`。上线空工作室，不打包本机data、原片、历史成片或.env文件。
 

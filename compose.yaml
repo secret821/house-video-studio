@@ -28,7 +28,7 @@ services:
       STUDIO_TEMPORARY_MEDIA: '1'
       PREBUILT_VIDEO_BUNDLES: '1'
       STUDIO_VIDEO_THREADS: ${STUDIO_VIDEO_THREADS:-1}
-      STUDIO_AUTH_CONFIG: /run/studio/auth.json
+      STUDIO_DB_CONFIG: /run/studio/mysql.json
       STUDIO_SESSION_STORE: /var/lib/studio/sessions/sessions.json
       STUDIO_WORKSPACE_LIMIT_MIB: ${STUDIO_WORKSPACE_LIMIT_MIB:-5120}
       STUDIO_MIN_DISK_FREE_MIB: ${STUDIO_MIN_DISK_FREE_MIB:-1024}
@@ -44,8 +44,8 @@ services:
         bind:
           create_host_path: false
       - type: bind
-        source: ${STUDIO_AUTH_FILE:?Set the administrator-owned auth file}
-        target: /run/studio/auth.json
+        source: ${STUDIO_DB_CONFIG_FILE:?Set the administrator-owned MySQL config file}
+        target: /run/studio/mysql.json
         read_only: true
         bind:
           create_host_path: false
@@ -59,8 +59,10 @@ services:
       test:
         - CMD
         - node
+        - --import
+        - tsx
         - -e
-        - "fetch('http://127.0.0.1:'+process.env.PORT+'/api/auth/session',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"
+        - "Promise.all([fetch('http://127.0.0.1:'+process.env.PORT+'/api/auth/session',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)throw Error('http')}),import('./server/database.ts').then(({verifyDatabase,closeDatabase})=>verifyDatabase().finally(()=>closeDatabase()))]).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       start_period: 90s

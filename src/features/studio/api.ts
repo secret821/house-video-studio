@@ -1,11 +1,8 @@
 /** All HTTP, parsing and import/export boundaries are confined to this business module. */
 import { z } from 'zod';
 import { workspaceRequest } from './auth-api';
-import {
-  readBrowserDraft,
-  saveBrowserDraft,
-  BrowserDraftKind,
-} from './browser-draft';
+import { readServerDraft, saveServerDraft } from './server-draft-api';
+import { DraftKind } from '@/services/definition/project';
 
 import {
   audioSchema,
@@ -13,6 +10,7 @@ import {
   openingSchema,
   jobSchema,
   projectSchema,
+  projectDraftSchema,
   sceneSchema,
   type Project,
   type Scene,
@@ -26,7 +24,11 @@ import {
 
 import videoEditApi from './video-edit-api';
 import type { VideoUploadOptions } from './video-edit-api';
-import { propertyExtractionResultSchema } from '../../services/definition/property-extraction';
+import {
+  propertyExtractionResultSchema,
+  propertyOcrCapabilitySchema,
+  propertyOcrResultSchema,
+} from '../../services/definition/property-extraction';
 
 /** A failed HTTP request remains a rejection carrying the server's useful message. */
 function request<T>(
@@ -70,6 +72,16 @@ function uploadImage(file: File) {
 }
 
 const api = {
+  getPropertyOcrCapability: () =>
+    request('copy/get-ocr-capability', { schema: propertyOcrCapabilitySchema }),
+  recognizePropertyScreenshot: (file: File) => {
+    const body = new FormData();
+    body.append('file', file);
+    return request('copy/recognize-property-screenshot', {
+      schema: propertyOcrResultSchema,
+      init: { method: 'POST', body },
+    });
+  },
   extractProperty: (text: string, freeQuotaConfirmed: true) =>
     request('copy/extract-property', {
       schema: propertyExtractionResultSchema,
@@ -96,7 +108,7 @@ const api = {
       });
     }),
   getDemo: () => request('get-demo', { schema: projectSchema }),
-  getDraft: () => readBrowserDraft(BrowserDraftKind.Photo, projectSchema),
+  getDraft: () => readServerDraft(DraftKind.Photo, projectDraftSchema),
   getCapabilities: () =>
     request('get-capabilities', {
       schema: z.object({
@@ -106,7 +118,7 @@ const api = {
       }),
     }),
   saveDraft: (project: Project) =>
-    saveBrowserDraft(BrowserDraftKind.Photo, projectSchema, project),
+    saveServerDraft(DraftKind.Photo, projectDraftSchema, project),
   uploadImage,
   getLatestRender: () =>
     request('get-latest-render-job', { schema: jobSchema.nullable() }),
@@ -123,8 +135,16 @@ const api = {
     }),
   createRender: (project: Project) =>
     request('create-render-job', { schema: jobSchema, init: post(project) }),
-  getRender: (id: string) =>
-    request(`get-render-job/${encodeURIComponent(id)}`, { schema: jobSchema }),
+  getRender: (id: string, signal?: AbortSignal) =>
+    request(`get-render-job/${encodeURIComponent(id)}`, {
+      schema: jobSchema,
+      init: {
+        signal: AbortSignal.any([
+          AbortSignal.timeout(30000),
+          ...(signal ? [signal] : []),
+        ]),
+      },
+    }),
   importProject: (file: File) =>
     file.text().then((text) => projectSchema.parse(JSON.parse(text))),
 };

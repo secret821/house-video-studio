@@ -46,6 +46,7 @@ export function updateSpeechCaptions(
     src: string;
     captions: Array<SpeechCaption>;
     onlyMissing: boolean;
+    draftOnly?: boolean;
   },
 ): VideoEditProject {
   let changed = false;
@@ -57,7 +58,12 @@ export function updateSpeechCaptions(
     )
       return video;
     changed = true;
-    return { ...video, speechCaptions: options.captions };
+    if (options.draftOnly) return { ...video, speechDraft: options.captions };
+    return {
+      ...video,
+      speechCaptions: options.captions,
+      speechDraft: undefined,
+    };
   }
   const opening = update(project.opening);
   const house = update(project.house);

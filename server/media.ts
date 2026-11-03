@@ -2,7 +2,7 @@
 import { workspaceDirectory } from './workspace';
 import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, unlinkSync } from 'node:fs';
 import { basename, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { parseFile } from 'music-metadata';
@@ -35,15 +35,28 @@ export class HttpError extends Error {
 /** Regex validation precedes resolution, preventing traversal and arbitrary URL rendering. */
 export function resolveAsset(src: string): string {
   const safe = mediaPathSchema.parse(src);
-  const path = safe.startsWith('/media/')
+  let path = safe.startsWith('/media/')
     ? resolve(workspaceDirectory('uploads'), basename(safe))
     : resolve(ROOT, 'public/demo', basename(safe));
+  if (!existsSync(path) && /^\/media\/import-[a-f0-9]+\.(mp4|jpg)$/.test(safe))
+    path = resolve(
+      workspaceDirectory('video-edit', 'prepared'),
+      basename(safe),
+    );
   if (!existsSync(path))
     throw new HttpError(
       400,
       '临时素材不存在或已过期，请重新上传或重新载入演示房源。',
     );
   return path;
+}
+
+/** A referenced prepared clip becomes durable by a same-volume rename, never a video copy/download. */
+export function retainDraftAsset(src: string) {
+  if (!src.startsWith('/media/')) return;
+  const path = resolveAsset(src);
+  const retained = resolve(workspaceDirectory('uploads'), basename(src));
+  if (path !== retained) renameSync(path, retained);
 }
 
 /** Full render validation also rejects stale narration and duplicate scene identifiers. */

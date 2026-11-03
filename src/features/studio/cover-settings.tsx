@@ -1,5 +1,6 @@
 /** Cover sources share the existing property lettering, local image upload and saved-project timing. */
-import { Select, InputNumber } from 'antd';
+import { Select, InputNumber } from './common';
+import { VideoTemplate } from '@/services/definition/project';
 
 import {
   COVER_SOURCE_MAP,
@@ -19,7 +20,10 @@ export function CoverSettings({
   return (
     <section className="space-y-6 pt-4" aria-label="封面底图与展示时长">
       <div className="island-select">
-        <span className="studio-label" id="cover-source-label">
+        <span
+          className="mb-2 block text-body font-medium"
+          id="cover-source-label"
+        >
           封面底图来源
         </span>
         <Select
@@ -37,7 +41,10 @@ export function CoverSettings({
           }
         />
         <p className="mt-2 text-xs text-muted">
-          默认使用首份房屋素材：视频取第一帧，照片直接使用。底图居中裁切，保留现有艺术字；预览、视频开头与导出封面一致。
+          {project.videoTemplate === VideoTemplate.Editorial
+            ? '杂志留白默认取口播开场视频第一帧，文字位于画面上半部，下面留出人物画面；仍可手动更换底图。'
+            : '经典实拍默认使用首份房屋素材：视频取第一帧，照片直接使用。'}
+          点击模板会应用其默认底图来源，仍可在当前模板手动更改；再次点击已选模板可恢复默认来源。底图居中裁切，预览、视频开头与导出封面一致。
         </p>
       </div>
       {project.coverSource === CoverSource.Image && (
@@ -66,7 +73,9 @@ export function CoverSettings({
         </div>
       )}
       <label className="block max-w-xs">
-        <span className="studio-label">封面展示时长 / 秒</span>
+        <span className="mb-2 block text-body font-medium">
+          封面展示时长 / 秒
+        </span>
         <InputNumber
           min={0.5}
           max={10}

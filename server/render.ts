@@ -132,6 +132,7 @@ export function createJob(project: Project, origin: string): RenderJob {
     );
   const job: RenderJob = {
     sessionId: project.sessionId,
+    videoTemplate: project.videoTemplate,
     id: randomUUID(),
     status: JobStatus.Rendering,
     progress: 0,

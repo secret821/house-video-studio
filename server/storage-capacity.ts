@@ -9,6 +9,7 @@ import {
   workspaceDirectory,
   workspaceState,
   TEMPORARY_MEDIA,
+  workspaceStorageDirectories,
 } from './workspace';
 
 export const MIB = 1024 * 1024;
@@ -60,11 +61,15 @@ export function reserveStorage(bytes: number): () => void {
       507,
       '服务器磁盘空间不足，已停止接收新任务；请稍后重试或联系管理员。',
     );
-  if (directoryBytes(root) + account.reserved + bytes > limits.accountBytes)
+  const used = workspaceStorageDirectories().reduce(
+    (sum, directory) => sum + directoryBytes(directory),
+    0,
+  );
+  if (used + account.reserved + bytes > limits.accountBytes)
     throw new HttpError(
       507,
       TEMPORARY_MEDIA
-        ? '当前账号临时文件已接近容量上限，请先下载成片，等待素材清理后重新上传。'
+        ? '当前账号文件已接近容量上限，请移除不再使用的素材或新建草稿后重试。'
         : '本机工作室文件已接近容量上限，请先下载并由管理员确认清理历史文件后重试。',
     );
   const releaseWorkspace = holdWorkspace();

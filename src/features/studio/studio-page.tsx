@@ -12,8 +12,9 @@ import {
   Progress,
   InputNumber,
   ConfigProvider,
-} from 'antd';
-import clsx from 'clsx';
+  ButtonAppearance,
+  cn,
+} from './common';
 import { useRef } from 'react';
 
 import {
@@ -26,6 +27,8 @@ import {
   MOTION_MAP,
   Motion,
   Transition,
+  VideoTemplate,
+  VIDEO_TEMPLATE_MAP,
 } from '../../services/definition/project';
 import { HouseTour } from '../../video/house-tour';
 import { getSceneFrames, getTimeline } from '../../video/timeline';
@@ -34,9 +37,11 @@ import { FileUpload } from './file-upload';
 import { VideoUploadStatus } from './video-upload-status';
 import { downloadProject } from './api';
 import { useStudio } from './use-studio';
+import { VideoTemplatePicker } from './video-template-picker';
 import { SceneEditor } from './scene-editor';
 import { OpeningPanel } from './opening-panel';
 import { StudioHeader } from './studio-header';
+import { StudioSectionHeading } from './studio-section-heading';
 
 const PROPERTY_FIELDS = [
   {
@@ -88,24 +93,29 @@ export function StudioPage() {
     project.name.length > 0 &&
     !busy &&
     (!project.opening || Boolean(project.opening.clip));
+  const generatedTemplate =
+    VIDEO_TEMPLATE_MAP[job?.videoTemplate ?? VideoTemplate.Classic].name;
   const statusText =
     work ?? (job?.status === JobStatus.Rendering ? job.message : null);
 
   return (
-    <div
-      key={project.sessionId}
-      className="studio-ui island-workspace min-h-screen"
-    >
+    <div key={project.sessionId} className="studio-ui min-h-screen bg-page">
       <StudioHeader
+        draftStatus={studio.draftStatus}
         busy={busy}
         saveDisabled={!project.name}
         photoMode
         actions={{ save: studio.saveDraft, newProject: studio.newProject }}
       />
 
-      <main className="studio-shell">
+      <main
+        className={cn(
+          'mx-auto w-full max-w-[1440px] px-6 pt-6 pb-[136px]',
+          'max-[800px]:px-4 max-[800px]:pt-4 max-[800px]:pb-[calc(208px+env(safe-area-inset-bottom))]',
+        )}
+      >
         <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-[28px] leading-9 font-semibold text-ink">
+          <h1 className="text-heading-1 font-semibold text-ink">
             照片精细编辑
           </h1>
           {statusText && (
@@ -114,36 +124,48 @@ export function StudioPage() {
             </div>
           )}
         </div>
+        <VideoTemplatePicker
+          value={project.videoTemplate}
+          disabled={busy}
+          onChange={studio.selectTemplate}
+        />
         <VideoUploadStatus upload={studio.upload} />
         {notice.text && (
           <div
             role={notice.error ? 'alert' : 'status'}
-            className={clsx('mb-5 rounded-lg border px-4 py-3', {
+            className={cn('mb-5 rounded-lg border px-4 py-3', {
               'border-danger text-danger': notice.error,
-              'border-primary bg-primary-soft text-body': !notice.error,
+              'border-primary bg-primary-soft text-content': !notice.error,
             })}
           >
             {notice.text}
           </div>
         )}
 
-        <div className="studio-editor-grid">
-          <div className="studio-editing-column">
+        <div
+          className={cn(
+            'grid grid-cols-[minmax(0,1fr)_336px] items-start gap-6',
+            'max-[1150px]:grid-cols-[minmax(0,1fr)_304px]',
+            'max-[800px]:grid-cols-1',
+          )}
+        >
+          <div className="grid min-w-0 gap-6 max-[800px]:gap-4">
             <section
               className="island-panel min-w-0"
               aria-label="房源信息与场景"
             >
+              <StudioSectionHeading step="01" title="素材与房源信息" />
               <OpeningPanel studio={studio} />
               <ConfigProvider componentDisabled={busy}>
                 <fieldset disabled={busy}>
-                  <h2 className="mb-5 text-xl leading-[30px] font-semibold text-ink">
-                    01 / 房源信息与照片
-                  </h2>
+                  <h3 className="mb-5 text-base leading-6 font-semibold text-ink">
+                    房源信息与照片
+                  </h3>
                   <div className="grid grid-cols-2 gap-x-3 gap-y-6">
                     {PROPERTY_FIELDS.map((field) => (
                       <label
                         key={field.key}
-                        className={clsx({
+                        className={cn({
                           'col-span-2': [
                             'name',
                             'location',
@@ -151,7 +173,9 @@ export function StudioPage() {
                           ].includes(field.key),
                         })}
                       >
-                        <span className="studio-label">{field.label}</span>
+                        <span className="mb-2 block text-body font-medium">
+                          {field.label}
+                        </span>
                         <Input
                           aria-label={field.label}
                           value={project[field.key]}
@@ -198,7 +222,7 @@ export function StudioPage() {
                           studio.setSelectedId(scene.id);
                           player.current?.seekTo(timeline.scenes[index].start);
                         }}
-                        className={clsx(
+                        className={cn(
                           'studio-scene-option flex items-center gap-3',
                           'w-full',
                           'p-2',
@@ -240,16 +264,16 @@ export function StudioPage() {
               className="island-panel min-w-0"
               aria-label="运镜与导出设置"
             >
+              <StudioSectionHeading step="02" title="运镜、声音与输出设置" />
               <ConfigProvider componentDisabled={busy}>
                 <fieldset disabled={busy}>
-                  <h2 className="mb-5 text-xl leading-[30px] font-semibold text-ink">
-                    02 / 运镜、声音与输出设置
-                  </h2>
                   {selected && (
                     <div className="space-y-6">
                       <div className="grid grid-cols-2 gap-3">
                         <label>
-                          <span className="studio-label">运镜方式</span>
+                          <span className="mb-2 block text-body font-medium">
+                            运镜方式
+                          </span>
                           <div className="island-select">
                             <Select
                               fieldNames={{ value: 'key', label: 'label' }}
@@ -266,7 +290,9 @@ export function StudioPage() {
                           </div>
                         </label>
                         <label>
-                          <span className="studio-label">基础时长 / 秒</span>
+                          <span className="mb-2 block text-body font-medium">
+                            基础时长 / 秒
+                          </span>
                           <InputNumber
                             min={3}
                             max={30}
@@ -286,7 +312,6 @@ export function StudioPage() {
                       <div>
                         <div className="flex flex-wrap gap-2">
                           <Button
-                            className="island-action"
                             disabled={selectedIndex <= 0}
                             onClick={() => studio.moveScene(-1)}
                             aria-label="场景上移"
@@ -294,7 +319,6 @@ export function StudioPage() {
                             上移
                           </Button>
                           <Button
-                            className="island-action"
                             disabled={
                               selectedIndex === project.scenes.length - 1
                             }
@@ -303,12 +327,7 @@ export function StudioPage() {
                           >
                             下移
                           </Button>
-                          <Button
-                            className="island-action"
-                            onClick={studio.removeScene}
-                          >
-                            移除场景
-                          </Button>
+                          <Button onClick={studio.removeScene}>移除场景</Button>
                         </div>
                       </div>
                     </div>
@@ -325,7 +344,7 @@ export function StudioPage() {
                   )}
                   <div className="mt-6 border-t border-line pt-5">
                     <Button
-                      className="island-action w-full"
+                      className="w-full"
                       onClick={studio.generateSpeech}
                       disabled={
                         !hasNarration || !studio.speechCapability.speechReady
@@ -339,7 +358,9 @@ export function StudioPage() {
                   </div>
                   <div className="mt-6 space-y-6 border-t border-line pt-5">
                     <label className="block">
-                      <span className="studio-label">左上角水印</span>
+                      <span className="mb-2 block text-body font-medium">
+                        左上角水印
+                      </span>
                       <Input
                         aria-label="左上角水印"
                         value={project.watermark}
@@ -357,7 +378,9 @@ export function StudioPage() {
                       </span>
                     </label>
                     <label className="block">
-                      <span className="studio-label">成片画幅</span>
+                      <span className="mb-2 block text-body font-medium">
+                        成片画幅
+                      </span>
                       <div className="island-select">
                         <Select
                           fieldNames={{ value: 'key', label: 'label' }}
@@ -380,7 +403,9 @@ export function StudioPage() {
                       </div>
                     </label>
                     <label className="block">
-                      <span className="studio-label">场景转场</span>
+                      <span className="mb-2 block text-body font-medium">
+                        场景转场
+                      </span>
                       <div className="island-select">
                         <Select
                           fieldNames={{ value: 'key', label: 'label' }}
@@ -402,7 +427,7 @@ export function StudioPage() {
                     </label>
                     {project.transition === Transition.Fade && (
                       <label className="block">
-                        <span className="studio-label">
+                        <span className="mb-2 block text-body font-medium">
                           淡化时长 · {project.transitionSeconds}秒
                         </span>
                         <Slider
@@ -453,7 +478,7 @@ export function StudioPage() {
                             <Button
                               type="text"
                               danger
-                              className="island-action shrink-0"
+                              className="shrink-0"
                               onClick={() =>
                                 studio.setProject({ ...project, music: null })
                               }
@@ -462,7 +487,7 @@ export function StudioPage() {
                             </Button>
                           </div>
                           <Button
-                            className="island-action mt-3"
+                            className="mt-3"
                             onClick={() =>
                               studio.setProject({
                                 ...project,
@@ -474,7 +499,7 @@ export function StudioPage() {
                             {Math.round(EMPTY_PROJECT.musicVolume * 100)}%）
                           </Button>
                           <label className="mt-3 block">
-                            <span className="studio-label">
+                            <span className="mb-2 block text-body font-medium">
                               背景音量 · {Math.round(project.musicVolume * 100)}
                               %
                             </span>
@@ -497,10 +522,7 @@ export function StudioPage() {
                       )}
                     </div>
                     <div className="flex flex-wrap gap-2">
-                      <Button
-                        className="island-action"
-                        onClick={() => downloadProject(project)}
-                      >
+                      <Button onClick={() => downloadProject(project)}>
                         导出配置
                       </Button>
                       <FileUpload
@@ -520,9 +542,17 @@ export function StudioPage() {
                 >
                   <h3 className="text-lg leading-7 font-medium text-ink">
                     导出任务
+                    {job.status === JobStatus.Complete &&
+                      ` · ${generatedTemplate}`}
                   </h3>
+                  {job.status === JobStatus.Rendering && (
+                    <p className="mt-3 text-sm text-content">
+                      任务已提交，正在后台生成。可以锁屏、切换应用或关闭页面；返回后自动恢复进度。任务编号：
+                      {job.id}
+                    </p>
+                  )}
                   <p
-                    className={clsx('mt-2 text-xs break-words', {
+                    className={cn('mt-2 text-xs break-words', {
                       'text-danger': job.status === JobStatus.Failed,
                       'text-muted': job.status !== JobStatus.Failed,
                     })}
@@ -543,11 +573,12 @@ export function StudioPage() {
                         controls
                       />
                       <Button
-                        className="studio-primary mt-3 w-full"
+                        appearance={ButtonAppearance.Solid}
+                        className="mt-3 w-full"
                         href={job.output}
-                        download="房源探盘视频.mp4"
+                        download={`房源探盘-${generatedTemplate}.mp4`}
                       >
-                        下载视频
+                        下载{generatedTemplate}视频
                       </Button>
                     </>
                   )}
@@ -570,7 +601,7 @@ export function StudioPage() {
               </span>
             </div>
             <div
-              className={clsx(
+              className={cn(
                 'flex items-center justify-center',
                 'min-h-[300px]',
                 'p-5',
@@ -611,7 +642,8 @@ export function StudioPage() {
                   <Button
                     onClick={studio.loadDemo}
                     disabled={busy}
-                    className="island-action studio-primary mt-6"
+                    appearance={ButtonAppearance.Solid}
+                    className="mt-6"
                   >
                     载入演示房源
                   </Button>
@@ -619,7 +651,7 @@ export function StudioPage() {
               )}
             </div>
             <div
-              className={clsx(
+              className={cn(
                 'flex flex-wrap items-center justify-between gap-2',
                 'mt-4',
                 'text-xs text-muted',
@@ -639,19 +671,26 @@ export function StudioPage() {
         </div>
       </main>
       <div className="studio-export-bar" aria-label="生成与下载">
-        <div className="studio-export-summary">
-          <strong>{busy ? '正在处理，请稍候' : '照片成片'}</strong>
-          <span>
+        <div className="grid min-w-0 gap-1 max-[800px]:w-full">
+          <strong className="text-body font-medium max-[800px]:hidden">
+            {busy ? '正在处理，请稍候' : '照片成片'}
+          </strong>
+          <span className="break-words text-caption text-muted">
             {studio.upload.message ||
               (staleSpeech
                 ? '解说已修改，请先更新配音'
                 : `${project.scenes.length}张照片 · ${(timeline.frames / FPS).toFixed(1)}秒`)}
           </span>
         </div>
-        <div className="studio-export-actions">
+        <div
+          className={cn(
+            'flex min-w-0 flex-wrap items-center gap-2',
+            'max-[800px]:w-full max-[800px]:[&>*:last-child]:flex-[1_0_auto]',
+            'max-[540px]:[&>*]:min-w-0',
+          )}
+        >
           {(studio.upload.active || studio.upload.cancelling) && (
             <Button
-              className="island-action"
               disabled={studio.upload.cancelling}
               onClick={studio.upload.cancelUpload}
             >
@@ -659,13 +698,15 @@ export function StudioPage() {
             </Button>
           )}
           {job?.status === JobStatus.Complete && job.output && (
-            <Button className="studio-button" href={job.output} download>
-              下载 MP4
+            <Button
+              href={job.output}
+              download={`房源探盘-${generatedTemplate}.mp4`}
+            >
+              下载{generatedTemplate} MP4
             </Button>
           )}
           <Button
-            className="island-action"
-            type="primary"
+            appearance={ButtonAppearance.Solid}
             disabled={!canExport}
             onClick={studio.exportVideo}
           >

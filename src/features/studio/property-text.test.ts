@@ -187,3 +187,86 @@ test('approximate values stay approximate, ranges and phone-like names require m
     {},
   );
 });
+
+test('labeled Beike-style facts preserve a plus price and do not mistake a short room count for a conflict', () => {
+  const fields = extractPropertyText(`1、🏡百顺苑小区
+✅面积：133.93㎡
+✅户型：4房2厅2卫
+✅装修：精装修
+✅亮点：顶楼带露台 + 附带柴草间
+✅朝向：南北通透
+✅税费：满五唯一，不限购
+✅总价：70+万
+大四房空间足，露台可种花晾晒`);
+  assert.deepEqual(propertyTextPatch(fields), {
+    name: '百顺苑',
+    facts: '顶楼 / 133.93㎡ / 4房2厅2卫 / 精装修',
+    price: '70+万',
+    extra: '带露台 / 另带柴草间 / 南北通透 / 满五唯一 / 不限购',
+  });
+  assert.equal(
+    fields.find((field) => field.key === 'layout')?.candidates.length,
+    1,
+  );
+});
+
+test('different complete layouts conflict and negated extras cannot become positive claims', () => {
+  const fields = extractPropertyText(
+    '户型4房2厅2卫，另一版4房1厅2卫；不带露台，未满五唯一。',
+  );
+  assert.deepEqual(fields.find((field) => field.key === 'layout')?.candidates, [
+    '4房2厅2卫',
+    '4房1厅2卫',
+  ]);
+  assert.equal(fields.find((field) => field.key === 'extra')?.value, '');
+});
+
+test('OCR line spacing and a misread square-metre glyph remain reviewable', () => {
+  assert.deepEqual(
+    propertyTextPatch(
+      extractPropertyText('小区名称 百顺苑\n面积： 133.93m\n总价：70+万'),
+    ),
+    { name: '百顺苑', facts: '133.93㎡', price: '70+万' },
+  );
+  assert.deepEqual(propertyTextPatch(extractPropertyText('长度 133.93m')), {});
+});
+
+test('a real listing screenshot uses the price and building area below the floor plan', () => {
+  const fields = extractPropertyText(`满五
+学府花园复式楼，5房3厅2卫。精装修。
+售价：66.8万
+房型：5室3厅
+建筑面积：168.45㎡
+楼栋 商品房 建成年代未知
+普通住宅 板楼
+房源 南朝向 无电梯
+高楼层(共7层)
+小区 学府花园(安福且·安福且)`);
+  assert.deepEqual(propertyTextPatch(fields), {
+    name: '学府花园',
+    facts: '住宅 / 共7层 / 高楼层 / 168.45㎡ / 5房3厅2卫 / 精装修',
+    price: '66.8万',
+    extra: '满五 / 南朝向 / 无电梯',
+  });
+});
+
+test('pasted screenshot OCR pairs the value row with its labels and ignores room sizes', () => {
+  const fields = extractPropertyText(`厨房 6.28m
+主卧 13.31m²
+户型 图片
+必看小区 安福县1万以下必看小区榜·第7名 满五
+学府花园复式楼，5房3厅2卫。精装修。
+66.8万 5室3厅 168.45
+售价 房型 建筑面积
+概览 动态 评价 小区 推荐
+普通住宅 板楼
+房源 南朝向 无电梯
+高楼层(共7层)
+小区 学府花园(安福且·安福且)`);
+  assert.deepEqual(propertyTextPatch(fields), {
+    name: '学府花园',
+    facts: '住宅 / 共7层 / 高楼层 / 168.45㎡ / 5房3厅2卫 / 精装修',
+    price: '66.8万',
+    extra: '满五 / 南朝向 / 无电梯',
+  });
+});

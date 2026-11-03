@@ -36,6 +36,7 @@ import {
   type ImportedVideo,
 } from '../src/services/definition/video-edit';
 import { acquireMediaSlot } from './media-queue';
+import { resolveAsset } from './media';
 import { getVideoProcessingThreads } from './video-bundles';
 import {
   JobStatus,
@@ -90,6 +91,7 @@ before(() => {
     'video-edit.tsx',
     'video-edit-timeline.ts',
     'video-edit-index.tsx',
+    'editorial-template.tsx',
     'video-subtitles.ts',
     'video-watermark.tsx',
   ].forEach((name) =>
@@ -296,11 +298,7 @@ test('native rendering accepts unspecified square-pixel metadata but rejects exp
     .then((asset) => service.prepareVideoForRender(asset))
     .then((prepared) => {
       assert.ok(prepared);
-      const target = resolve(
-        isolated,
-        'data/uploads',
-        prepared.src.split('/').pop()!,
-      );
+      const target = resolveAsset(prepared.src);
       return Promise.all(
         [unspecified, target].map((path) =>
           uploads.runVideoUploadMedia(
@@ -398,7 +396,7 @@ test('compatible H264 video keeps every original video packet while normalizing 
     .then((asset) => {
       assert.equal(asset?.preparation, VideoPreparation.Ready);
       assert.match(asset!.poster, /import-.*\.jpg$/);
-      target = resolve(isolated, 'data/uploads', asset!.src.split('/').pop()!);
+      target = resolveAsset(asset!.src);
       return service
         .prepareVideoForRender(clip)
         .then((cached) => assert.equal(cached?.src, asset?.src));
@@ -445,9 +443,7 @@ test('24fps and rotated sources still use normalization and preserve their inten
     .then((asset) => {
       assert.equal(asset.preparation, VideoPreparation.Original);
       assert.deepEqual(
-        readFileSync(
-          resolve(isolated, 'data/uploads', asset.src.split('/').pop()!),
-        ),
+        readFileSync(resolveAsset(asset.src)),
         readFileSync(slower),
       );
       return service.prepareVideoForRender(asset);
@@ -475,7 +471,7 @@ test('24fps and rotated sources still use normalization and preserve their inten
           'stream=r_frame_rate',
           '-of',
           'json',
-          resolve(isolated, 'data/uploads', asset.src.split('/').pop()!),
+          resolveAsset(asset.src),
         ],
         { cwd: isolated },
       );
@@ -557,9 +553,7 @@ test('HEVC phone originals remain unchanged until explicit preparation produces 
     .then((asset) => {
       assert.equal(asset.preparation, VideoPreparation.Original);
       assert.deepEqual(
-        readFileSync(
-          resolve(isolated, 'data/uploads', asset.src.split('/').pop()!),
-        ),
+        readFileSync(resolveAsset(asset.src)),
         readFileSync(source),
       );
       return service.prepareVideoForRender(asset);
@@ -568,9 +562,7 @@ test('HEVC phone originals remain unchanged until explicit preparation produces 
       assert.ok(asset);
       assert.equal(asset.preparation, VideoPreparation.Ready);
       assert.equal(asset.hasAudio, false);
-      return service.probeVideo(
-        resolve(isolated, 'data/uploads', asset.src.split('/').pop()!),
-      );
+      return service.probeVideo(resolveAsset(asset.src));
     })
     .then((metadata) => assert.equal(metadata.canCopyVideo, true));
 });
@@ -1143,7 +1135,7 @@ test('built-in music has five distinct, reusable, non-clipping stereo scores and
   const hashes = new Set<string>();
   for (const track of Object.values(MusicTrack)) {
     const asset = music.getOriginalMusic(track);
-    const path = resolve(isolated, 'data/uploads', asset.src.split('/').pop()!);
+    const path = resolveAsset(asset.src);
     const bytes = readFileSync(path);
     assert.equal(bytes.toString('ascii', 0, 4), 'RIFF');
     assert.equal(bytes.readUInt16LE(22), 2);
@@ -1347,4 +1339,32 @@ test('video processing threads require a bounded administrator opt-in', () => {
     assert.equal(getVideoProcessingThreads(value), 1);
   for (const value of ['1', '2', '3'])
     assert.equal(getVideoProcessingThreads(value), Number(value));
+});
+
+test('editorial defaults to the presenter cover while classic and explicit cover choices remain compatible', () => {
+  const legacy = {
+    ...EMPTY_VIDEO_EDIT,
+    videoTemplate: undefined,
+    coverSource: undefined,
+  };
+  assert.equal(videoEditSchema.parse(legacy).videoTemplate, 'classic');
+  assert.equal(videoEditSchema.parse(legacy).coverSource, CoverSource.House);
+  const editorial = videoEditSchema.parse({
+    ...legacy,
+    videoTemplate: 'editorial',
+  });
+  assert.equal(editorial.coverSource, CoverSource.Opening);
+  assert.equal(
+    videoEditSchema.parse({ ...editorial, coverSource: CoverSource.House })
+      .coverSource,
+    CoverSource.House,
+  );
+  assert.equal(
+    videoEditSchema.safeParse({ ...legacy, videoTemplate: 'unknown' }).success,
+    false,
+  );
+  assert.deepEqual(
+    getVideoEditTimeline(editorial),
+    getVideoEditTimeline(videoEditSchema.parse(legacy)),
+  );
 });

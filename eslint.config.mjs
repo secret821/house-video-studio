@@ -39,4 +39,25 @@ export default tseslint.config(
       ],
     },
   },
+  {
+    files: ['src/features/studio/**/*.{ts,tsx}'],
+    ignores: [
+      'src/features/studio/common/**',
+      'src/features/studio/studio-provider.tsx',
+    ],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['antd', 'antd/*'],
+              message:
+                'Import product UI controls from studio/common; keep antd implementation inside that boundary.',
+            },
+          ],
+        },
+      ],
+    },
+  },
 );

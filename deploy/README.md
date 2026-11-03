@@ -2,6 +2,8 @@
 
 腾讯云新站`http://106.54.221.18`的单容器部署、账号迁移与验收状态见 [Docker部署](docker/README.md)。旧阿里云systemd/宝塔服务继续保留，本页后续发布记录属于旧机；不得将新4核服务器的Compose限额套用到原2核2GiB机器，也不自动停止旧站。
 
+当前腾讯云正式版为2026-11-03 opening-removal，完整容量保护已随冻结版本上线；下文“本地候选”描述仅指旧机当时的历史状态。最新发布、回退与验证见Docker部署的当前运行版本。
+
 ## 磁盘维护
 
 2026-10-30 已独立安装每日维护timer，正式主应用未切换、未重启。服务器根分区约40G、已用22G、可用17G；业务目录54M，验收目录1.2G、发布包5.3G。临时模式已开启，近7天未见temporary-media清理错误。七份已完成且无运行进程的验收data已标记，合计约345MiB，从标记起至少保留7天；含软链接的环境外壳保持。首次与补标记后的维护均成功且零删除，后续执行以journal实际结果为准。容量保护仍为本地候选，不宣称线上已生效。
@@ -42,6 +44,8 @@
 
 Kokoro配音当前仅为本地候选，尚未发布。候选包须额外包含 `scripts/kokoro-inference.py`、`scripts/setup-kokoro.ts` 和 `scripts/kokoro-requirements.txt`。管理员准备Python 3.10～3.13，执行 `pnpm setup:kokoro`，用 `STUDIO_KOKORO_DIR` 指向独立持久目录，服务用户需有读取模型及写入词典缓存权限；模型不放入临时业务data。Linux仅安装CPU版PyTorch，不复制macOS虚拟环境。须在现有768MiB限制下完成中文单张/批量、视频排队、账号隔离和真实MP4候选验收并记录峰值/OOM后才能发布；本轮未提高资源上限。未安装或自检失败时配音禁用，原声和上传录音仍可使用。
 
+房源截图OCR同样仅为本地候选，尚未发布。若以后加入发布包，需包含 `scripts/property-ocr.py`、`scripts/setup-ocr.ts`、`scripts/ocr-requirements.txt` 和中文自检样本；Linux使用Python 3.10～3.13重新创建环境，可指定持久 `STUDIO_OCR_DIR`，执行 `pnpm setup:ocr` 完成离线自检。当前Baota发布清单不含OCR脚本和模型，按钮保持禁用；启用前须按整服务限制验收长截图、内存峰值及与媒体任务排队，不复制macOS虚拟环境。
+
 本项目是按账号隔离的文件存储工具，不使用ImageForge数据库。发布目录为`/opt/house-video-studio/releases`，`current`指向当前版本；业务文件仅在`shared/data/temporary/session-*`按账号临时保存（2小时空闲清理，重启清空），私有百炼配置为`shared/.env.cloud`。上线空工作室，不打包本机data、原片、历史成片或.env文件。
 
 本机执行完整验证、`pnpm build`及`pnpm build:video`，只打包`.next`（排除cache）、`.video-bundles`、`src`、`server`、`public`、`deploy`、package.json、pnpm-lock.yaml、next.config.mjs、tsconfig.json和next-env.d.ts。Linux服务器须重新安装生产依赖，不能复制macOS node_modules；tsx为自定义服务器的生产依赖。上传至新的时间戳release后执行`bash deploy/stage-baota.sh <release绝对路径>`。脚本安装独立、校验摘要的Node22，准备Remotion浏览器，使用独立housevideo用户和systemd服务；不会替换全局Node或修改现有应用。
@@ -80,7 +84,7 @@ macOS打包必须去除资源分支和扩展属性，例如 `COPYFILE_DISABLE=1 
 
 多账号管理员操作：准备管理员私有的新增账号JSON（username/password），在候选release执行`node --import tsx scripts/add-account.ts <现有auth.json> <新增私有凭据JSON> <新的私有输出JSON>`。脚本保留原哈希并分配稳定UUID，拒绝重名且不覆盖输出。账号标识用于临时目录及浏览器草稿命名，不复制旧业务数据。配置备份后由root设root:housevideo/0640，父目录0750，以同文件系统rename原子替换；应用不得写认证文件，凭据不得进入构建包、日志或README。
 
-前后端和unit须同包切换：session新增username/workspaceId/temporaryMedia/mediaSessionId，上传phase新增waiting，多账号业务API必须带X-Studio-Workspace并与Cookie一致；旧页面须刷新；7天会话版本起服务重启保留登录，临时素材仍清空。业务草稿改存浏览器localStorage（仅JSON，按账号/模式分开）；服务器save-draft为410、get-draft仅空模板。浏览器清理数据/换设备不会同步草稿。过期或重启后草稿文字保留，素材须重传。VERIFY_JOB验收还需VERIFY_PROJECT指向浏览器手工导出的草稿JSON。
+前后端和unit须同包切换：session新增username/workspaceId/temporaryMedia/mediaSessionId，上传phase新增waiting，多账号业务API必须带X-Studio-Workspace并与Cookie一致；旧页面须刷新；7天会话版本起服务重启保留登录，临时素材仍清空。业务当前草稿按账号/模式自动覆盖保存：localStorage存JSON，IndexedDB存当前引用素材Blob，新建替换且不保留历史；服务器save-draft为410、get-draft仅空模板。浏览器清理数据/换设备不会同步草稿。过期或重启后优先从当前浏览器备份通过既有校验上传接口恢复素材；没有本地备份的旧素材须重传。生成202/任务编号返回后执行独立于浏览器，服务进程仍须持续运行；服务重启继续沿用中断失败语义。VERIFY_JOB验收还需VERIFY_PROJECT指向浏览器手工导出的草稿JSON。
 
 正式unit必须设置`STUDIO_TEMPORARY_MEDIA=1`，公网缺配置拒绝启动。磁盘临时目录为shared/data/temporary/session-*/<id>，不放/run等tmpfs；启动清理上个进程目录。账号2小时无实际使用后清理，每分钟检查；状态轮询不续期。上传/导出队列、运行任务和媒体流持有清理保护；不能删除运行中任务目录。模板包/进程锁为不含业务媒体的_control目录。登录配置保留，临时模式禁用依赖持久预算账本的付费生成功能，避免清理账本后重置旧授权；不因部署发模型请求。照片解码/生成准备/导出FIFO单槽，不提高768MiB/一个CPU核限制。视频上传不占重型槽，5分钟只覆盖接收与信息校验，轻量探测槽一次1个FFprobe，独立30秒截止。
 

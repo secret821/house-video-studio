@@ -4,6 +4,8 @@ import {
   workspaceState,
   startWorkspaceCleanup,
   TEMPORARY_MEDIA,
+  getWorkspace,
+  runInWorkspace,
 } from './workspace';
 import express from 'express';
 import multer from 'multer';
@@ -16,8 +18,10 @@ import { VIDEO_UPLOAD_TIMEOUT_MS } from '../src/services/definition/video-upload
 
 import {
   JobStatus,
+  DraftKind,
   openingInputSchema,
   projectSchema,
+  projectDraftSchema,
   sceneSchema,
 } from '../src/services/definition/project';
 
@@ -52,7 +56,25 @@ import { subtitlesRouter } from './subtitles';
 import { smartCleanRouter } from './smart-clean';
 import { getAccessPolicy } from './access-policy';
 import { installWorkspaceAuth, loadAuthCredentials } from './auth';
+import { loadActiveAccounts, getAccountId } from './account-repository';
+import { closeDatabase, databaseEnabled, verifyDatabase } from './database';
+import {
+  prepareLocalStudioPort,
+  stopPreviousLocalStudio,
+} from './port-recovery';
+import {
+  getDatabaseCurrentDraft,
+  saveDatabaseCurrentDraft,
+  cleanupDatabaseDiscardedMedia,
+  startDatabaseDraftCleanup,
+} from './database-current-draft';
 import { reserveStorage, storageLimits, MIB } from './storage-capacity';
+import {
+  getCurrentDraft,
+  saveCurrentDraft,
+  cleanupDiscardedDraftMedia,
+  startCurrentDraftCleanup,
+} from './current-draft';
 
 storageLimits();
 
@@ -88,20 +110,90 @@ app.use((req, res, next) => {
 });
 if (process.env.PUBLIC_ORIGIN && !process.env.STUDIO_SESSION_STORE)
   throw new Error('公网服务必须配置STUDIO_SESSION_STORE以保留7天登录状态。');
-installWorkspaceAuth(app, {
-  credentials: loadAuthCredentials(
-    process.env.STUDIO_AUTH_CONFIG,
-    process.env.PUBLIC_ORIGIN,
-  ),
-  publicOrigin: process.env.PUBLIC_ORIGIN,
-  sessionStorePath: process.env.STUDIO_SESSION_STORE,
-  port,
-});
+if (process.env.PUBLIC_ORIGIN && !databaseEnabled())
+  throw new Error('公网服务必须配置 STUDIO_DB_CONFIG 并完成 MySQL 迁移。');
+const authApp = express();
+app.use(authApp);
+const authReady = databaseEnabled()
+  ? verifyDatabase()
+      .then(() => loadActiveAccounts())
+      .then((accounts) => {
+        if (process.env.PUBLIC_ORIGIN && !accounts.length)
+          throw new Error('MySQL 中没有有效的工作室账号。');
+        return accounts.length
+          ? {
+              accounts: accounts.map(
+                ({ workspaceId, username, salt, passwordHash }) => ({
+                  workspaceId,
+                  username,
+                  salt,
+                  passwordHash,
+                }),
+              ),
+            }
+          : getAccountId('legacy').then(() => null);
+      })
+      .then((credentials) => {
+        installWorkspaceAuth(authApp, {
+          credentials,
+          publicOrigin: process.env.PUBLIC_ORIGIN,
+          sessionStorePath: process.env.STUDIO_SESSION_STORE,
+          port,
+        });
+      })
+  : Promise.resolve().then(() => {
+      installWorkspaceAuth(authApp, {
+        credentials: loadAuthCredentials(
+          process.env.STUDIO_AUTH_CONFIG,
+          process.env.PUBLIC_ORIGIN,
+        ),
+        publicOrigin: process.env.PUBLIC_ORIGIN,
+        sessionStorePath: process.env.STUDIO_SESSION_STORE,
+        port,
+      });
+    });
 // Timed captions can exceed the small metadata body; scope the larger bounded JSON parser to video export.
-app.use('/api/video-edit/create-render-job', express.json({ limit: '2mb' }));
+app.use(
+  [
+    '/api/video-edit/create-render-job',
+    '/api/video-edit/save-draft',
+    '/api/save-draft',
+  ],
+  express.json({ limit: '2mb' }),
+);
 app.use(express.json({ limit: '256kb' }));
+app.use((_req, res, next) => {
+  // Auth's earlier finish listener releases the request first; active jobs/streams still prevent deletion.
+  const workspace = getWorkspace();
+  res.once('finish', () =>
+    runInWorkspace(workspace, () => {
+      try {
+        if (databaseEnabled()) {
+          cleanupDatabaseDiscardedMedia().catch(() =>
+            console.error(
+              '[current-draft:cleanup] MySQL 旧素材清理失败，将在下次检查时重试。',
+            ),
+          );
+          return;
+        }
+        cleanupDiscardedDraftMedia();
+      } catch {
+        console.error(
+          '[current-draft:cleanup] 旧素材清理未完成，将在下次检查时重试。',
+        );
+      }
+    }),
+  );
+  next();
+});
 app.use('/media', (req, res, next) =>
   express.static(workspaceDirectory('uploads'), {
+    dotfiles: 'deny',
+    index: false,
+  })(req, res, next),
+);
+app.use('/media', (req, res, next) =>
+  express.static(workspaceDirectory('video-edit', 'prepared'), {
     dotfiles: 'deny',
     index: false,
   })(req, res, next),
@@ -164,11 +256,23 @@ app.get('/api/get-opening-job/:id', (req, res) =>
 );
 app.get('/api/get-demo', (_req, res) => res.json(DEMO_PROJECT));
 app.get('/api/get-latest-render-job', (_req, res) => res.json(getLatestJob()));
-app.get('/api/get-draft', (_req, res) => res.json(null));
-app.post('/api/save-draft', (_req, res) =>
-  res
-    .status(410)
-    .json({ message: '草稿改为仅存当前浏览器，请刷新页面后保存。' }),
+app.get('/api/get-draft', (_req, res, next) =>
+  Promise.resolve(
+    databaseEnabled()
+      ? getDatabaseCurrentDraft(DraftKind.Photo, projectDraftSchema)
+      : getCurrentDraft(DraftKind.Photo, projectDraftSchema),
+  )
+    .then((draft) => res.json(draft))
+    .catch(next),
+);
+app.post('/api/save-draft', (req, res, next) =>
+  Promise.resolve(
+    databaseEnabled()
+      ? saveDatabaseCurrentDraft(DraftKind.Photo, projectDraftSchema, req.body)
+      : saveCurrentDraft(DraftKind.Photo, projectDraftSchema, req.body),
+  )
+    .then((draft) => res.json(draft))
+    .catch(next),
 );
 const imageUpload = multer({
   storage: multer.memoryStorage(),
@@ -330,11 +434,32 @@ function startApp() {
   });
 }
 
-startApp()
+function listenOnce(): Promise<import('node:http').Server> {
+  return new Promise((resolve, reject) => {
+    const server = app.listen(port, '127.0.0.1');
+    server.once('error', reject);
+    server.once('listening', () => {
+      server.removeListener('error', reject);
+      resolve(server);
+    });
+  });
+}
+
+authReady
+  .then(() => {
+    if (
+      process.argv.includes('--production') &&
+      !existsSync(resolve(ROOT, '.next/BUILD_ID'))
+    )
+      throw new Error('请先执行 pnpm build。');
+    return process.env.PUBLIC_ORIGIN
+      ? undefined
+      : prepareLocalStudioPort(port, ROOT);
+  })
+  .then(() => startApp())
   .then(() => {
     // Generate the immutable score once before accepting media work; account copies do not allocate synthesis buffers.
     Object.values(MusicTrack).forEach((track) => getOriginalMusic(track));
-    startWorkspaceCleanup();
     app.use(
       (
         error: unknown,
@@ -358,18 +483,25 @@ startApp()
         res.status(status).json({ message });
       },
     );
-    const server = app
-      .listen(port, '127.0.0.1', () =>
-        console.info(`房源视频工作室已启动：${origin}`),
-      )
-      .on('error', (error: Error) => {
-        console.error('本地服务启动失败：', error.message);
-        process.exit(1);
+    return listenOnce()
+      .catch((error: NodeJS.ErrnoException) => {
+        if (error.code !== 'EADDRINUSE' || process.env.PUBLIC_ORIGIN)
+          throw error;
+        return stopPreviousLocalStudio(port, ROOT).then(() => listenOnce());
+      })
+      .then((server) => {
+        // Keep Node's request deadline beyond the per-upload cancellation and cleanup deadline.
+        server.requestTimeout = VIDEO_UPLOAD_TIMEOUT_MS + 30_000;
+        startWorkspaceCleanup();
+        if (databaseEnabled()) startDatabaseDraftCleanup();
+        else startCurrentDraftCleanup();
+        console.info(`房源视频工作室已启动：${origin}`);
       });
-    // Keep Node's request deadline beyond the per-upload cancellation and cleanup deadline.
-    server.requestTimeout = VIDEO_UPLOAD_TIMEOUT_MS + 30_000;
   })
   .catch((error: unknown) => {
-    console.error(error);
-    process.exitCode = 1;
+    console.error(
+      '[startup]',
+      error instanceof Error ? error.message : '服务初始化失败。',
+    );
+    return closeDatabase().finally(() => process.exit(1));
   });

@@ -5,7 +5,16 @@ import {
   PauseCircleOutlined,
   PlayCircleOutlined,
 } from '@ant-design/icons';
-import { Alert, Button, Flex, Input, Select, Typography, Modal } from 'antd';
+import {
+  Alert,
+  Button,
+  Flex,
+  Input,
+  Select,
+  Typography,
+  Modal,
+  cn,
+} from './common';
 import { MusicTrack, MUSIC_TRACK_MAP } from '@/services/definition/music';
 import type { AudioAsset } from '@/services/definition/project';
 import type {
@@ -39,6 +48,11 @@ const SEARCH_KEYWORDS: Record<string, string> = {
   爵士: 'jazz',
 };
 const SEARCH_SUGGESTIONS = ['钢琴', '吉他', '氛围', '欢快'];
+const MUSIC_OPTION_CLASS = 'flex min-w-0 items-center gap-3';
+const MUSIC_TITLE_CLASS = cn(
+  'min-w-0 flex-1 truncate [&>small]:block',
+  '[&>small]:whitespace-normal [&>small]:text-caption [&>small]:text-muted',
+);
 
 function searchKeyword(query: string) {
   const term = query.trim();
@@ -201,7 +215,11 @@ export function MusicPicker({ music, busy, onSelect }: Props) {
     return (
       <Button
         type="text"
-        className="music-preview-button"
+        size="small"
+        className={cn(
+          '!inline-flex !min-h-8 !min-w-16 !shrink-0',
+          '!items-center !justify-center !gap-2',
+        )}
         icon={icon}
         disabled={busy}
         aria-label={`${active ? '暂停' : '试听'} ${title}`}
@@ -236,7 +254,7 @@ export function MusicPicker({ music, busy, onSelect }: Props) {
   if (searchKeyword(query) !== query.trim())
     searchStatus += ` “${query.trim()}”按 ${searchKeyword(query)} 搜索。`;
   return (
-    <div className="music-picker">
+    <div className="grid min-w-0 gap-6">
       <Modal
         open={importing}
         title="正在加载在线音乐"
@@ -252,7 +270,9 @@ export function MusicPicker({ music, busy, onSelect }: Props) {
         </p>
       </Modal>
       <div>
-        <span className="studio-label">内置曲目 · 随时可用</span>
+        <span className="mb-2 block text-body font-medium">
+          内置曲目 · 随时可用
+        </span>
         <Select
           virtual={false}
           className="w-full"
@@ -272,8 +292,8 @@ export function MusicPicker({ music, busy, onSelect }: Props) {
             const track = option.value as MusicTrack;
             const item = MUSIC_TRACK_MAP[track];
             return (
-              <div className="music-option">
-                <span className="music-option-title">
+              <div className={MUSIC_OPTION_CLASS}>
+                <span className={MUSIC_TITLE_CLASS}>
                   {item.name}
                   <small>{item.description}</small>
                 </span>
@@ -288,7 +308,9 @@ export function MusicPicker({ music, busy, onSelect }: Props) {
         />
       </div>
       <Flex vertical gap={12}>
-        <span className="studio-label mb-0">在线免费音乐库 · ccMixter</span>
+        <span className="mb-0 block text-body font-medium">
+          在线免费音乐库 · ccMixter
+        </span>
         <Input.Search
           aria-label="搜索免费音乐"
           value={query}
@@ -354,8 +376,8 @@ export function MusicPicker({ music, busy, onSelect }: Props) {
             // Closing animations can still render old options after a new search clears results.
             const { track } = option.data;
             return (
-              <div className="music-option">
-                <span className="music-option-title">
+              <div className={MUSIC_OPTION_CLASS}>
+                <span className={MUSIC_TITLE_CLASS}>
                   {track.credit.title}
                   <small>{track.credit.author} · CC BY</small>
                 </span>
@@ -383,13 +405,13 @@ export function MusicPicker({ music, busy, onSelect }: Props) {
       </Flex>
       {message && <Alert type="warning" title={message} showIcon />}
       {music && (
-        <div className="music-current">
-          <span className="music-option-title">已选：{music.name}</span>
+        <div className={MUSIC_OPTION_CLASS}>
+          <span className={MUSIC_TITLE_CLASS}>已选：{music.name}</span>
           {previewButton('selected', music.src, music.name)}
         </div>
       )}
       {music?.musicCredit && (
-        <div className="music-credit">
+        <div className="break-words text-caption text-muted">
           <Typography.Paragraph
             copyable={{ text: music.musicCredit.attribution }}
           >

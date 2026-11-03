@@ -7,8 +7,9 @@ import {
   Collapse,
   ConfigProvider,
   Flex,
-} from 'antd';
+} from './common';
 import { SoundOutlined, CloseOutlined } from '@ant-design/icons';
+import { VideoTemplate } from '@/services/definition/project';
 
 import { MusicPicker } from './music-picker';
 import {
@@ -18,6 +19,7 @@ import {
 
 import { FileUpload } from './file-upload';
 import { CoverSettings } from './cover-settings';
+import { StudioSectionHeading } from './studio-section-heading';
 import type { useVideoEdit } from './use-video-edit';
 
 const VOLUMES = [
@@ -39,17 +41,22 @@ export function VideoEditSettings({
       className="island-panel studio-section"
       aria-label="封面与声音设置"
     >
-      <div className="studio-section-heading">
-        <span>03</span>
-        <div>
-          <h2>封面与声音</h2>
-          <p>首份房屋素材作封面 · 原声保留 · 轻配乐</p>
-        </div>
-      </div>
+      <StudioSectionHeading
+        step="03"
+        title="封面与声音"
+        description={
+          <>
+            {project.videoTemplate === VideoTemplate.Editorial
+              ? '口播开场首帧作封面 · 上部文字 · 下方人物留白'
+              : '首份房屋素材作封面'}{' '}
+            · 原声保留 · 轻配乐
+          </>
+        }
+      />
       <ConfigProvider componentDisabled={busy}>
         <fieldset disabled={busy}>
           <label className="mb-6 block">
-            <span className="studio-label">左上角水印</span>
+            <span className="mb-2 block text-body font-medium">左上角水印</span>
             <Input
               aria-label="左上角水印"
               value={project.watermark}
@@ -64,7 +71,7 @@ export function VideoEditSettings({
             </span>
           </label>
           <Collapse
-            className="studio-disclosure studio-cover-options"
+            className="studio-disclosure !mt-0"
             ghost
             expandIconPlacement="end"
             activeKey={
@@ -112,7 +119,6 @@ export function VideoEditSettings({
                         {project.music && (
                           <Flex wrap align="center" gap={12}>
                             <Button
-                              className="island-action"
                               icon={<SoundOutlined />}
                               onClick={() =>
                                 editor.patch({
@@ -125,7 +131,6 @@ export function VideoEditSettings({
                               %）
                             </Button>
                             <Button
-                              className="island-action"
                               icon={<CloseOutlined />}
                               onClick={() => editor.patch({ music: null })}
                             >
@@ -144,7 +149,7 @@ export function VideoEditSettings({
                       )}
                       {VOLUMES.map((field) => (
                         <label key={field.key} className="block">
-                          <span className="studio-label">
+                          <span className="mb-2 block text-body font-medium">
                             {field.label} ·{' '}
                             {Math.round(project[field.key] * 100)}%
                           </span>
@@ -164,7 +169,9 @@ export function VideoEditSettings({
                         </label>
                       ))}
                       <label className="block">
-                        <span className="studio-label">柔和淡化转场</span>
+                        <span className="mb-2 block text-body font-medium">
+                          柔和淡化转场
+                        </span>
                         <div className="island-select">
                           <Select
                             fieldNames={{ value: 'key', label: 'label' }}

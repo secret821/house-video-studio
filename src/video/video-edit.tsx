@@ -2,9 +2,15 @@
 import { Audio, Video } from '@remotion/media';
 import { TransitionSeries, linearTiming } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
-import { Fragment, type CSSProperties } from 'react';
+import { Fragment } from 'react';
 import { getSubtitleFrames } from './video-subtitles';
 import { VideoWatermark } from './video-watermark';
+import {
+  PropertyCoverCopy,
+  EDITORIAL_TEXT,
+  EDITORIAL_TITLE,
+} from './editorial-template';
+import { VideoTemplate } from '../services/definition/project';
 import {
   AbsoluteFill,
   Img,
@@ -32,16 +38,6 @@ const INK = '#141917';
 const WHITE = '#f8f5ee';
 const CHAMPAGNE = '#dac7a4';
 const FONT = 'PingFang SC, Microsoft YaHei, sans-serif';
-const COVER_LETTERING: CSSProperties = {
-  fontFamily: 'Arial Black, PingFang SC, Microsoft YaHei, sans-serif',
-  fontWeight: 900,
-  fontStyle: 'italic',
-  color: '#fff',
-  WebkitTextStroke: '12px #121212',
-  paintOrder: 'stroke fill',
-  textShadow: '7px 10px 0 #121212',
-  overflowWrap: 'anywhere',
-};
 
 /** The source stays unobstructed through the center; copy sits in generous lower-third safe space. */
 function ShotCopy({
@@ -74,14 +70,22 @@ function ShotCopy({
     : 1;
   return (
     <AbsoluteFill
-      style={{ fontFamily: FONT, color: WHITE, opacity: outroOpacity }}
+      style={{
+        fontFamily: FONT,
+        color: WHITE,
+        opacity: outroOpacity,
+        ...(project.videoTemplate === VideoTemplate.Editorial &&
+          EDITORIAL_TEXT),
+      }}
     >
-      <AbsoluteFill
-        style={{
-          background:
-            'linear-gradient(180deg,rgba(15,20,17,.55),transparent 26%,transparent 52%,rgba(15,20,17,.88))',
-        }}
-      />
+      {project.videoTemplate === VideoTemplate.Classic && (
+        <AbsoluteFill
+          style={{
+            background:
+              'linear-gradient(180deg,rgba(15,20,17,.55),transparent 26%,transparent 52%,rgba(15,20,17,.88))',
+          }}
+        />
+      )}
       <div
         style={{
           position: 'absolute',
@@ -102,8 +106,16 @@ function ShotCopy({
           position: 'absolute',
           left: 84,
           right: 84,
-          bottom: project.subtitlesEnabled ? undefined : 250,
-          top: project.subtitlesEnabled ? 240 : undefined,
+          bottom:
+            project.subtitlesEnabled ||
+            project.videoTemplate === VideoTemplate.Editorial
+              ? undefined
+              : 250,
+          top:
+            project.subtitlesEnabled ||
+            project.videoTemplate === VideoTemplate.Editorial
+              ? 240
+              : undefined,
           opacity: interpolate(
             frame,
             [0, VIDEO_EDIT_TIMING.captionFadeSeconds * fps],
@@ -127,6 +139,8 @@ function ShotCopy({
         </div>
         <div
           style={{
+            ...(project.videoTemplate === VideoTemplate.Editorial &&
+              EDITORIAL_TITLE),
             fontSize: 84,
             fontWeight: 500,
             lineHeight: 1.3,
@@ -178,7 +192,12 @@ function OpeningIdentity({ project }: { project: VideoEditProject }) {
       style={{
         fontFamily: FONT,
         color: WHITE,
-        background: 'linear-gradient(0deg,rgba(15,20,17,.7),transparent 32%)',
+        ...(project.videoTemplate === VideoTemplate.Editorial &&
+          EDITORIAL_TEXT),
+        background:
+          project.videoTemplate === VideoTemplate.Classic
+            ? 'linear-gradient(0deg,rgba(15,20,17,.7),transparent 32%)'
+            : undefined,
       }}
     >
       <div style={{ position: 'absolute', bottom: 128, left: 84, right: 84 }}>
@@ -203,6 +222,8 @@ function PropertySummary({ project }: { project: VideoEditProject }) {
         fontFamily: FONT,
         justifyContent: 'center',
         padding: 84,
+        ...(project.videoTemplate === VideoTemplate.Editorial &&
+          EDITORIAL_TEXT),
       }}
     >
       <div style={{ fontSize: 34, color: CHAMPAGNE, letterSpacing: 5 }}>
@@ -506,96 +527,14 @@ export function VideoEditCover({ project }: { project: VideoEditProject }) {
           />
         </Sequence>
       )}
-      <AbsoluteFill
-        style={{
-          padding: '240px 84px 170px',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-          textAlign: 'center',
-        }}
-      >
-        <div style={{ width: '100%', transform: 'rotate(-2deg)' }}>
-          <div
-            style={{
-              ...COVER_LETTERING,
-              fontSize: 44,
-              fontStyle: 'normal',
-              WebkitTextStroke: '6px #121212',
-              letterSpacing: 6,
-              marginBottom: 24,
-            }}
-          >
-            预约实地看房
-          </div>
-          <div
-            style={{
-              ...COVER_LETTERING,
-              fontSize: 148,
-              lineHeight: 1.25,
-              letterSpacing: 1,
-            }}
-          >
-            {project.name}
-          </div>
-        </div>
-        <div
-          style={{
-            ...COVER_LETTERING,
-            width: '100%',
-            color: '#e87973',
-            WebkitTextStroke: '14px #fff',
-            textShadow: '7px 10px 0 #121212, -3px -3px 0 #121212',
-            fontSize: 190,
-            lineHeight: 1.1,
-            transform: 'rotate(-3deg)',
-          }}
-        >
-          <div style={{ fontSize: 62, marginBottom: 16 }}>总价</div>
-          {project.price}
-        </div>
-        <div
-          style={{
-            ...COVER_LETTERING,
-            width: '100%',
-            fontSize: 64,
-            lineHeight: 1.55,
-            WebkitTextStroke: '9px #121212',
-            transform: 'rotate(-1deg)',
-          }}
-        >
-          {project.facts}
-          <div style={{ fontSize: 86, marginTop: 26 }}>{project.extra}</div>
-        </div>
-        <div
-          style={{
-            ...COVER_LETTERING,
-            width: '100%',
-            fontSize: 42,
-            lineHeight: 1.5,
-            fontStyle: 'normal',
-            WebkitTextStroke: '6px #121212',
-          }}
-        >
-          {project.contact}
-        </div>
-      </AbsoluteFill>
-      <div
-        style={{
-          ...COVER_LETTERING,
-          position: 'absolute',
-          left: 84,
-          right: 84,
-          bottom: 80,
-          textAlign: 'center',
-          fontSize: 25,
-          fontWeight: 600,
-          fontStyle: 'normal',
-          WebkitTextStroke: '3px #121212',
-          textShadow: '1px 2px 3px #121212',
-        }}
-      >
-        房源信息与附属空间情况，以实地核实为准
-      </div>
+      <PropertyCoverCopy
+        name={project.name}
+        price={project.price}
+        facts={project.facts}
+        extra={project.extra}
+        contact={project.contact}
+        template={project.videoTemplate}
+      />
       <VideoWatermark text={project.watermark} />
     </AbsoluteFill>
   );

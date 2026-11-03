@@ -8,6 +8,7 @@ import {
   projectSchema,
   Motion,
   Transition,
+  VideoTemplate,
   type Scene,
 } from '../services/definition/project';
 
@@ -96,4 +97,26 @@ test('watermark defaults on legacy photo drafts, permits custom or empty text an
       projectSchema.safeParse({ ...legacy, watermark }).success,
       false,
     );
+});
+
+test('legacy photo drafts keep classic while explicit template choices survive validation', () => {
+  const legacy = { ...EMPTY_PROJECT, videoTemplate: undefined };
+  assert.equal(projectSchema.parse(legacy).videoTemplate, 'classic');
+  assert.equal(
+    projectSchema.parse({ ...legacy, videoTemplate: 'editorial' })
+      .videoTemplate,
+    'editorial',
+  );
+  assert.equal(
+    projectSchema.safeParse({ ...legacy, videoTemplate: 'untrusted-template' })
+      .success,
+    false,
+  );
+  assert.deepEqual(
+    getTimeline({
+      ...EMPTY_PROJECT,
+      videoTemplate: VideoTemplate.Editorial,
+    }),
+    getTimeline(EMPTY_PROJECT),
+  );
 });

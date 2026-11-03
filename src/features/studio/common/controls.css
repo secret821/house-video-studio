@@ -1,0 +1,100 @@
+/* Shared control geometry; theme colors remain in StudioProvider. */
+.studio-ui .ant-btn {
+  max-width: 100%;
+}
+/* Match the reference CommonButton: 36px normal, 32px small, 2px corners. */
+.studio-ui .studio-common-button {
+  min-height: 36px;
+  height: auto;
+  padding: 6px 16px;
+  border-radius: 2px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 22px;
+}
+.studio-ui .studio-common-button.ant-btn-sm {
+  min-height: 32px;
+  padding: 4px 12px;
+}
+.studio-ui .studio-common-button.ant-btn-icon-only {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+}
+.studio-ui .studio-common-button.ant-btn-icon-only.ant-btn-sm {
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+}
+.studio-ui
+  .studio-common-button.ant-btn-primary:disabled:not(.ant-btn-dangerous) {
+  background: var(--studio-primary-color);
+  border-color: var(--studio-primary-color);
+  color: #fff;
+  opacity: 0.5;
+}
+.studio-ui .studio-common-button > span:last-child {
+  min-width: 0;
+  white-space: normal;
+  line-height: 22px;
+}
+.studio-ui .ant-btn .ant-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+.studio-ui :is(.ant-input-number, .ant-select) {
+  width: 100%;
+  min-width: 0;
+}
+.studio-ui textarea.ant-input {
+  line-height: 24px;
+  resize: vertical;
+}
+.ant-select-dropdown .ant-select-item-option-content {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.studio-ui .ant-slider-horizontal {
+  width: auto;
+  margin: 16px 10px;
+  touch-action: pan-y;
+}
+.studio-ui .ant-checkbox-wrapper {
+  align-items: center;
+  min-height: 32px;
+  max-width: 100%;
+  line-height: 24px;
+}
+.studio-ui .ant-checkbox {
+  flex-shrink: 0;
+}
+.studio-ui .ant-checkbox-wrapper > span:last-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 800px) {
+  .studio-ui
+    :is(
+      input.ant-input,
+      .ant-input-affix-wrapper,
+      .ant-input-number,
+      .ant-select
+    ) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+  .studio-ui .ant-input-affix-wrapper > input.ant-input {
+    min-height: 0;
+  }
+  .studio-ui textarea.ant-input {
+    font-size: 16px;
+  }
+  .studio-ui .ant-checkbox-wrapper {
+    min-height: 44px;
+  }
+}

@@ -33,17 +33,18 @@ import { z } from 'zod';
 import {
   FPS,
   JobStatus,
+  DraftKind,
   VideoPreparation,
   VIDEO_PENDING_POSTER,
 } from '../src/services/definition/project';
 import {
-  EMPTY_VIDEO_EDIT,
   CoverSource,
   HouseMediaKind,
   getHouseMaterials,
   importedVideoSchema,
   videoEditJobSchema,
   videoEditSchema,
+  videoEditDraftSchema,
   type ImportedVideo,
   type VideoEditJob,
   type VideoEditProject,
@@ -59,6 +60,12 @@ import {
 
 import { ROOT, HttpError, resolveAsset } from './media';
 import { getOriginalMusic } from './video-edit-music';
+import { getCurrentDraft, saveCurrentDraft } from './current-draft';
+import {
+  getDatabaseCurrentDraft,
+  saveDatabaseCurrentDraft,
+} from './database-current-draft';
+import { databaseEnabled } from './database';
 import { MusicTrack, musicTrackSchema } from '../src/services/definition/music';
 import {
   beginVideoUpload,
@@ -344,7 +351,10 @@ function normalizeVideo({
   task: Pick<VideoUploadTask, 'controller'>;
 }): Promise<ImportedVideo> {
   const filename = `import-${digest}.mp4`;
-  const target = resolve(workspaceDirectory('uploads'), filename);
+  const target = resolve(
+    workspaceDirectory('video-edit', 'prepared'),
+    filename,
+  );
   const part = resolve(
     workspaceDirectory('video-edit', 'incoming'),
     `${randomUUID()}.part.mp4`,
@@ -354,7 +364,7 @@ function normalizeVideo({
     workspaceDirectory('video-edit', 'incoming'),
     `${randomUUID()}.part.jpg`,
   );
-  const disk = statfsSync(workspaceDirectory('uploads'));
+  const disk = statfsSync(workspaceDirectory('video-edit', 'prepared'));
   if (disk.bavail * disk.bsize < statSync(path).size * 2 + 128 * 1024 * 1024)
     return Promise.reject(
       new HttpError(507, '可用磁盘空间不足，请先释放空间再上传。'),
@@ -430,7 +440,10 @@ function normalizeVideo({
     })
     .then(() => probeVideo(target, task))
     .then((metadata) => {
-      const posterPath = resolve(workspaceDirectory('uploads'), poster);
+      const posterPath = resolve(
+        workspaceDirectory('video-edit', 'prepared'),
+        poster,
+      );
       const pending = existsSync(posterPath)
         ? Promise.resolve()
         : runVideoUploadMedia(task, {
@@ -650,6 +663,7 @@ export function createVideoEditJob(
     );
   const job: VideoEditJob = {
     sessionId: project.sessionId,
+    videoTemplate: project.videoTemplate,
     id: randomUUID(),
     status: JobStatus.Rendering,
     progress: 0,
@@ -663,6 +677,7 @@ export function createVideoEditJob(
     'video-edit-timeline.ts',
     'video-subtitles.ts',
     'video-watermark.tsx',
+    'editorial-template.tsx',
     'video-edit-index.tsx',
   ]
     .map((file) => readFileSync(resolve(ROOT, 'src/video', file), 'utf8'))
@@ -949,8 +964,14 @@ export function createVideoEditJob(
 }
 
 export const videoEditRouter = Router();
-videoEditRouter.get('/get-draft', (_req, res) =>
-  res.json({ ...EMPTY_VIDEO_EDIT, music: getOriginalMusic() }),
+videoEditRouter.get('/get-draft', (_req, res, next) =>
+  Promise.resolve(
+    databaseEnabled()
+      ? getDatabaseCurrentDraft(DraftKind.Video, videoEditDraftSchema)
+      : getCurrentDraft(DraftKind.Video, videoEditDraftSchema),
+  )
+    .then((draft) => res.json(draft))
+    .catch(next),
 );
 videoEditRouter.get('/get-original-music', (req, res) =>
   res.json(
@@ -959,10 +980,18 @@ videoEditRouter.get('/get-original-music', (req, res) =>
     ),
   ),
 );
-videoEditRouter.post('/save-draft', (_req, res) =>
-  res
-    .status(410)
-    .json({ message: '草稿改为仅存当前浏览器，请刷新页面后保存。' }),
+videoEditRouter.post('/save-draft', (req, res, next) =>
+  Promise.resolve(
+    databaseEnabled()
+      ? saveDatabaseCurrentDraft(
+          DraftKind.Video,
+          videoEditDraftSchema,
+          req.body,
+        )
+      : saveCurrentDraft(DraftKind.Video, videoEditDraftSchema, req.body),
+  )
+    .then((draft) => res.json(draft))
+    .catch(next),
 );
 videoEditRouter.get('/get-latest-render-job', (_req, res) =>
   res.json(getLatestVideoEditJob()),

@@ -1,6 +1,5 @@
 /** Recorded presenter videos are uploaded locally and played before the photo tour with their original audio. */
-import { Button, ConfigProvider } from 'antd';
-import clsx from 'clsx';
+import { Button, ConfigProvider, cn } from './common';
 
 import { FileUpload } from './file-upload';
 import type { useStudio } from './use-studio';
@@ -18,9 +17,9 @@ export function OpeningPanel({
       className="mb-7 border-b border-line pb-7"
       aria-label="人物口播开场"
     >
-      <h2 className="mb-4 text-xl leading-[30px] font-semibold text-ink">
+      <h3 className="mb-4 text-base leading-6 font-semibold text-ink">
         人物开场（可选）
-      </h2>
+      </h3>
       <ConfigProvider componentDisabled={busy}>
         <fieldset disabled={busy} className="space-y-4">
           <FileUpload
@@ -33,10 +32,7 @@ export function OpeningPanel({
             MP4 / MOV，1GB以内，最长60秒。仅在本机处理。
           </p>
           {project.opening && (
-            <Button
-              className="island-action w-full"
-              onClick={studio.removeOpening}
-            >
+            <Button className="w-full" onClick={studio.removeOpening}>
               移除人物开场
             </Button>
           )}
@@ -52,7 +48,7 @@ export function OpeningPanel({
             playsInline
           />
           <div
-            className={clsx(
+            className={cn(
               'flex flex-wrap items-center justify-between gap-2',
               'mt-2',
               'text-xs text-muted',

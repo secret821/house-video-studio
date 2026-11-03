@@ -30,9 +30,13 @@ after(() => {
   process.chdir(original);
   rmSync(isolated, { recursive: true, force: true });
 });
-test('restart drops old process files; idle expiry clears only its own files and rotates its media epoch', () => {
+test('restart and idle expiry discard scratch but retain account originals', () => {
   const a = workspace.registerWorkspace('11111111-1111-4111-8111-111111111111');
   const b = workspace.registerWorkspace('22222222-2222-4222-8222-222222222222');
+  const scratch = workspace.runInWorkspace(b, () =>
+    resolve(workspace.workspaceDirectory('exports'), 'scratch.mp4'),
+  );
+  writeFileSync(scratch, 'temporary output');
   const first = workspace.runInWorkspace(a, () =>
     resolve(workspace.workspaceDirectory('uploads'), 'a.mp4'),
   );
@@ -48,12 +52,13 @@ test('restart drops old process files; idle expiry clears only its own files and
   const now = Date.now() + workspace.MEDIA_RETENTION_MS + 100;
   assert.deepEqual(workspace.cleanupWorkspaces(now), [b.id]);
   assert.equal(readFileSync(first, 'utf8'), 'first');
-  assert.equal(existsSync(second), false);
+  assert.equal(readFileSync(second, 'utf8'), 'second');
+  assert.equal(existsSync(scratch), false);
   assert.notEqual(b.mediaSessionId, epoch);
   assert.equal(b.state.size, 0);
   release();
   assert.deepEqual(workspace.cleanupWorkspaces(now), [a.id]);
-  assert.equal(existsSync(first), false);
+  assert.equal(readFileSync(first, 'utf8'), 'first');
 });
 test('temporary workspaces cannot reset the old paid budget or submit paid generation', () => {
   return import('./cloud').then((cloud) =>

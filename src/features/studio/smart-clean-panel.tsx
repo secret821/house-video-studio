@@ -1,5 +1,5 @@
 /** One explicit local action analyzes and applies cleaned picture copies, with original speech and a reversible asset swap. */
-import { Button, Progress } from 'antd';
+import { Button, Progress } from './common';
 import { useEffect, useRef, useState } from 'react';
 import { JobStatus } from '@/services/definition/project';
 import {
@@ -183,23 +183,18 @@ export function SmartCleanPanel({
     >
       <div className="flex flex-wrap items-center gap-3">
         <Button
-          className="island-action"
           disabled={editor.busy || !capability.ready || !videos.length}
           onClick={start}
         >
           智能清理并应用
         </Button>
         {working && (
-          <Button className="island-action" disabled={pending} onClick={cancel}>
+          <Button disabled={pending} onClick={cancel}>
             取消清理
           </Button>
         )}
         {!working && undo.length > 0 && (
-          <Button
-            className="island-action"
-            disabled={editor.busy}
-            onClick={restore}
-          >
+          <Button disabled={editor.busy} onClick={restore}>
             撤回画面清理
           </Button>
         )}

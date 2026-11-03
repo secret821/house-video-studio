@@ -1,6 +1,5 @@
 /** Per-photo copy and explicit audio actions live next to the photo selector, not hidden in export settings. */
-import { Button, Input, Collapse } from 'antd';
-import clsx from 'clsx';
+import { Button, Input, Collapse, cn } from './common';
 
 import { CopyKind } from '../../services/definition/copy';
 
@@ -50,6 +49,15 @@ export function SceneEditor({ studio }: SceneEditorProps) {
             children: (
               <>
                 <CopyGenerator
+                  draft={{
+                    brief: project.copyBrief ?? '',
+                    suggestion: project.copyDraft ?? null,
+                    onChange: (patch) =>
+                      studio.setProject((current) => ({
+                        ...current,
+                        ...patch,
+                      })),
+                  }}
                   disabled={busy}
                   input={{
                     kind: CopyKind.Photo,
@@ -76,7 +84,7 @@ export function SceneEditor({ studio }: SceneEditorProps) {
         ]}
       />
       <label className="block">
-        <span className="studio-label">当前图片标题</span>
+        <span className="mb-2 block text-body font-medium">当前图片标题</span>
         <Input
           aria-label="当前图片标题"
           value={selected.title}
@@ -85,11 +93,11 @@ export function SceneEditor({ studio }: SceneEditorProps) {
         />
       </label>
       <label className="block">
-        <span className="studio-label">
+        <span className="mb-2 block text-body font-medium">
           解说文案 · {selected.narration.length}/300
         </span>
         <Input.TextArea
-          className={clsx(
+          className={cn(
             'w-full min-h-28',
             'px-3 py-2',
             'rounded-lg border border-input bg-panel',
@@ -106,9 +114,11 @@ export function SceneEditor({ studio }: SceneEditorProps) {
         />
       </label>
       <label className="block">
-        <span className="studio-label">独立字幕文案 · 免费修改</span>
+        <span className="mb-2 block text-body font-medium">
+          独立字幕文案 · 免费修改
+        </span>
         <Input.TextArea
-          className={clsx(
+          className={cn(
             'w-full min-h-24',
             'px-3 py-2',
             'rounded-lg border border-input bg-panel',
@@ -143,7 +153,7 @@ export function SceneEditor({ studio }: SceneEditorProps) {
             />
             <Button
               danger
-              className="island-action mt-2"
+              className="mt-2"
               onClick={() => studio.patchScene({ voiceover: null })}
             >
               移除当前图片配音
@@ -152,7 +162,7 @@ export function SceneEditor({ studio }: SceneEditorProps) {
         )}
         <div className="flex flex-col gap-2">
           <Button
-            className="island-action w-full"
+            className="w-full"
             disabled={
               busy || emptyScript || !studio.speechCapability.localSpeechReady
             }

@@ -1,11 +1,18 @@
 /** Anchor navigation stays available while all three intake sections remain accessible. */
 import { useEffect, useRef, useState } from 'react';
+import { cn } from './common';
+import {
+  EditOutlined,
+  EyeOutlined,
+  FolderOpenOutlined,
+  PictureOutlined,
+} from '@ant-design/icons';
 
 const STEPS = [
-  { id: 'studio-materials', number: '01', label: '素材' },
-  { id: 'studio-copy', number: '02', label: '文案' },
-  { id: 'studio-settings', number: '03', label: '封面' },
-  { id: 'studio-preview', number: '04', label: '预览' },
+  { id: 'studio-materials', icon: FolderOpenOutlined, label: '素材' },
+  { id: 'studio-copy', icon: EditOutlined, label: '文案' },
+  { id: 'studio-settings', icon: PictureOutlined, label: '封面' },
+  { id: 'studio-preview', icon: EyeOutlined, label: '预览' },
 ] as const;
 
 /** Reading position follows section starts, including sections taller than the viewport. */
@@ -46,24 +53,42 @@ export function StudioNavigation({ onPreview }: { onPreview?: () => void }) {
     };
   }, []);
   return (
-    <nav ref={navigation} className="studio-step-nav" aria-label="视频制作步骤">
-      {STEPS.map((step) => (
-        <a
-          key={step.id}
-          href={`#${step.id}`}
-          aria-current={current === step.id ? 'step' : undefined}
-          onClick={(event) => {
-            setCurrent(step.id);
-            if (step.id === 'studio-preview' && onPreview) {
-              event.preventDefault();
-              onPreview();
-            }
-          }}
-        >
-          <span>{step.number}</span>
-          {step.label}
-        </a>
-      ))}
+    <nav
+      ref={navigation}
+      className={cn(
+        'studio-step-nav sticky top-[var(--studio-header-height,0px)] z-30 mb-6',
+        'grid grid-cols-4 border-b border-line bg-panel px-4',
+        'max-[800px]:mb-4 max-[800px]:px-0',
+      )}
+      aria-label="视频制作步骤"
+    >
+      {STEPS.map((step) => {
+        const Icon = step.icon;
+        return (
+          <a
+            key={step.id}
+            className={cn(
+              'flex min-h-14 items-center justify-center gap-2 border-b-2 border-transparent px-2 py-3',
+              'text-body font-medium text-muted transition-[color,background,border-color] duration-150',
+              'hover:bg-primary-soft hover:text-primary-hover',
+              'aria-[current=step]:border-primary aria-[current=step]:bg-primary-soft aria-[current=step]:font-semibold aria-[current=step]:text-primary-hover',
+              'max-[800px]:min-h-12 max-[800px]:gap-1 max-[800px]:px-1 max-[800px]:py-2',
+            )}
+            href={`#${step.id}`}
+            aria-current={current === step.id ? 'step' : undefined}
+            onClick={(event) => {
+              setCurrent(step.id);
+              if (step.id === 'studio-preview' && onPreview) {
+                event.preventDefault();
+                onPreview();
+              }
+            }}
+          >
+            <Icon aria-hidden="true" />
+            {step.label}
+          </a>
+        );
+      })}
     </nav>
   );
 }

@@ -64,6 +64,7 @@ export function planSegments(
   } = project;
   const common = {
     aspect,
+    videoTemplate: project.videoTemplate,
     showCaptions,
     watermark: project.watermark,
     template: identity.template,
@@ -166,7 +167,13 @@ const manifestSchema = z.object({
 /** The same template identity invalidates both disk segments and the server's compiled bundle. */
 export function getTemplateFingerprint(): string {
   return fingerprint(
-    ['house-tour.tsx', 'timeline.ts', 'root.tsx', 'video-watermark.tsx']
+    [
+      'house-tour.tsx',
+      'timeline.ts',
+      'root.tsx',
+      'video-watermark.tsx',
+      'editorial-template.tsx',
+    ]
       .map((file) => readFileSync(resolve(ROOT, 'src/video', file), 'utf8'))
       .concat('range-pcm-48000-veryfast-v2'),
   );

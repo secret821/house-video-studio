@@ -7,6 +7,7 @@ import {
   Motion,
   OpeningSource,
   Transition,
+  VideoTemplate,
   type Project,
 } from '../src/services/definition/project';
 import { getTimeline } from '../src/video/timeline';
@@ -177,4 +178,15 @@ test('editing or disabling the full-film watermark invalidates every photo range
     assert.equal(changed(next).length, segments.length);
     assert.ok(changed(next).some((segment) => segment.sceneIds.length === 0));
   }
+});
+
+test('changing the visual template rebuilds every cached range without altering original clips or narration', () => {
+  const next = {
+    ...project,
+    videoTemplate: VideoTemplate.Editorial,
+  };
+  assert.equal(changed(next).length, planSegments(project, identity).length);
+  assert.deepEqual(next.scenes, project.scenes);
+  assert.deepEqual(next.opening, project.opening);
+  assert.deepEqual(getTimeline(next), getTimeline(project));
 });

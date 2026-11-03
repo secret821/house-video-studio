@@ -1,5 +1,5 @@
 /** Shared studio copy suggestions remain separate from authored text until the user explicitly applies them. */
-import { Button, Checkbox, Input } from 'antd';
+import { Button, Checkbox, Input, ButtonAppearance } from './common';
 import { useEffect, useState } from 'react';
 
 import {
@@ -12,16 +12,26 @@ import {
 } from '../../services/definition/copy';
 
 import api from './api';
+import type { SavedCopyDraft } from '@/services/definition/copy-result';
 
 /** Bind each result to its exact facts, selected scene and shot ranges; changes hide stale suggestions. */
 export function CopyGenerator({
   input,
   disabled,
   onApply,
+  draft,
 }: {
   input: CopyInput;
   disabled: boolean;
   onApply: (result: CopyResult) => void;
+  draft: {
+    brief: string;
+    suggestion: SavedCopyDraft | null;
+    onChange: (patch: {
+      copyBrief?: string;
+      copyDraft?: SavedCopyDraft | null;
+    }) => void;
+  };
 }) {
   const [capability, setCapability] = useState({
     ready: false,
@@ -30,12 +40,17 @@ export function CopyGenerator({
   const [confirmed, setConfirmed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
-  const [saved, setSaved] = useState<{
-    identity: string;
-    result: CopyResult;
-  } | null>(null);
+  const { brief, suggestion: saved, onChange } = draft;
+  /** Suggested text belongs to the current draft; applying it remains a separate explicit action. */
+  function setSaved(
+    value:
+      | SavedCopyDraft
+      | null
+      | ((current: SavedCopyDraft | null) => SavedCopyDraft | null),
+  ) {
+    onChange({ copyDraft: typeof value === 'function' ? value(saved) : value });
+  }
   const [applied, setApplied] = useState(false);
-  const [brief, setBrief] = useState('');
   const requestInput: CopyInput = { ...input, brief };
   const identity = JSON.stringify(requestInput);
   const result = saved?.identity === identity ? saved.result : null;
@@ -126,14 +141,16 @@ export function CopyGenerator({
           : '按片段时长抽取2～6张关键帧，长片段写得更完整；照片直接看图。不发送人物开场与声音，画面说明不等于原声逐字字幕。'}
       </p>
       <label className="block">
-        <span className="studio-label">文案要求（可选）</span>
+        <span className="mb-2 block text-body font-medium">
+          文案要求（可选）
+        </span>
         <Input.TextArea
           aria-label="文案要求"
           className="min-h-24 w-full resize-y px-4 py-3 text-sm"
           maxLength={2000}
           value={brief}
           disabled={disabled || loading}
-          onChange={(event) => setBrief(event.target.value)}
+          onChange={(event) => onChange({ copyBrief: event.target.value })}
           placeholder="例如：自然带看语气，重点说明画面中的布局和收纳；长片段分两三句，不要空泛广告语。房源数字请先填入上方信息。"
         />
       </label>
@@ -163,7 +180,7 @@ export function CopyGenerator({
         本程序无法读取免费余额或设置上述开关；未开启时可能按量计费。仅点击生成才调用，已有相同结果优先复用。
       </p>
       <Button
-        className="island-action w-full"
+        className="w-full"
         disabled={disabled || loading || !capability.ready || !confirmed}
         loading={loading}
         onClick={generate}
@@ -196,7 +213,9 @@ export function CopyGenerator({
           {result.items.map((item, index) => (
             <div key={item.id} className="space-y-2 border-t border-line pt-3">
               <label className="block">
-                <span className="studio-label">第{index + 1}段 · 标题</span>
+                <span className="mb-2 block text-body font-medium">
+                  第{index + 1}段 · 标题
+                </span>
                 <Input
                   aria-label={`建议第${index + 1}段标题`}
                   value={item.title}
@@ -209,7 +228,7 @@ export function CopyGenerator({
               </label>
               {input.kind === CopyKind.Photo && (
                 <label className="block">
-                  <span className="studio-label">
+                  <span className="mb-2 block text-body font-medium">
                     解说 · {item.narration.length}/160
                   </span>
                   <Input.TextArea
@@ -225,7 +244,7 @@ export function CopyGenerator({
                 </label>
               )}
               <label className="block">
-                <span className="studio-label">
+                <span className="mb-2 block text-body font-medium">
                   字幕 · {item.caption.length}/100
                 </span>
                 <Input.TextArea
@@ -240,7 +259,7 @@ export function CopyGenerator({
                 />
               </label>
               {input.kind === CopyKind.Video && (
-                <p className="text-sm text-body">
+                <p className="text-sm text-content">
                   完整说明参考：{item.narration}
                   <span className="block text-xs text-muted">
                     供改写字幕参考，不写入成片或替换原声；短镜头字幕按阅读长度保留完整短句。
@@ -256,8 +275,8 @@ export function CopyGenerator({
             </p>
           )}
           <Button
-            type="primary"
-            className="island-action w-full"
+            appearance={ButtonAppearance.Solid}
+            className="w-full"
             disabled={disabled || loading || applied || invalidDraft}
             onClick={() => {
               onApply(result);

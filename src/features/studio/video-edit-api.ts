@@ -5,14 +5,12 @@ import {
   cleanJobSchema,
 } from '@/services/definition/smart-clean';
 import { workspaceRequest } from './auth-api';
-import {
-  readBrowserDraft,
-  saveBrowserDraft,
-  BrowserDraftKind,
-} from './browser-draft';
+import { readServerDraft, saveServerDraft } from './server-draft-api';
+import { DraftKind } from '@/services/definition/project';
 
 import { audioSchema } from '../../services/definition/project';
 import { MusicTrack } from '../../services/definition/music';
+import { createMediaId } from '../../services/definition/media-id';
 import {
   subtitleCapabilitySchema,
   subtitleJobSchema,
@@ -25,7 +23,7 @@ import {
   EMPTY_VIDEO_EDIT,
   importedVideoSchema,
   videoEditJobSchema,
-  videoEditSchema,
+  videoEditDraftSchema,
   type VideoEditProject,
 } from '../../services/definition/video-edit';
 
@@ -112,6 +110,13 @@ function upload(file: File): RequestInit {
   return { method: 'POST', body };
 }
 const api = {
+  /** First load and explicit New share the same owned offline score; failure must not replace the current draft. */
+  createDraft: () =>
+    api.getOriginalMusic().then((music) => ({
+      ...EMPTY_VIDEO_EDIT,
+      sessionId: createMediaId(),
+      music,
+    })),
   getCleanCapability: () =>
     request('smart-clean/get-capability', { schema: cleanCapabilitySchema }),
   getLatestCleanJob: () =>
@@ -154,15 +159,20 @@ const api = {
       init: post({ id }),
     }),
   getDraft: () =>
-    readBrowserDraft(BrowserDraftKind.Video, videoEditSchema).then((draft) => {
+    readServerDraft(DraftKind.Video, videoEditDraftSchema).then<{
+      project: VideoEditProject;
+      mediaExpired: boolean;
+      mediaError?: string;
+    }>((draft) => {
       if (draft.project) return { ...draft, project: draft.project };
-      return api.getOriginalMusic().then((music) => ({
-        project: { ...EMPTY_VIDEO_EDIT, music },
+      return api.createDraft().then((project) => ({
+        ...draft,
+        project,
         mediaExpired: false,
       }));
     }),
   saveDraft: (project: VideoEditProject) =>
-    saveBrowserDraft(BrowserDraftKind.Video, videoEditSchema, project),
+    saveServerDraft(DraftKind.Video, videoEditDraftSchema, project),
   uploadVideo: (file: File, options?: VideoUploadOptions) =>
     request(
       `video-edit/upload-video${options ? `?uploadId=${encodeURIComponent(options.id)}` : ''}`,
@@ -196,9 +206,10 @@ const api = {
     request('video-edit/get-latest-render-job', {
       schema: videoEditJobSchema.nullable(),
     }),
-  getJob: (id: string) =>
+  getJob: (id: string, signal?: AbortSignal) =>
     request(`video-edit/get-render-job/${encodeURIComponent(id)}`, {
       schema: videoEditJobSchema,
+      init: { signal },
     }),
   createJob: (project: VideoEditProject) =>
     request('video-edit/create-render-job', {

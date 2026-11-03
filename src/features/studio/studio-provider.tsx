@@ -1,54 +1,76 @@
 'use client';
 
-/** Ant Design owns interaction and SSR styles; the studio keeps its existing warm visual system. */
+/** Ant Design owns interaction and SSR styles; tokens follow the reference research workbench. */
 import { App, ConfigProvider, type ThemeConfig } from 'antd';
+import './common/controls.css';
 import zhCN from 'antd/locale/zh_CN';
 import type { ReactNode } from 'react';
 
 const STUDIO_THEME: ThemeConfig = {
   token: {
-    colorPrimary: '#b9503b',
-    colorInfo: '#b9503b',
-    colorSuccess: '#60764f',
-    colorWarning: '#bd6b22',
-    colorError: '#bc423b',
-    colorText: '#38243b',
-    colorTextSecondary: '#776577',
-    colorTextDisabled: '#998c91',
-    colorBgContainer: '#fffcf5',
-    colorBgElevated: '#fffcf5',
-    colorBgLayout: '#fff4df',
-    colorBorder: '#dfceba',
-    colorBorderSecondary: '#ebdecd',
-    borderRadius: 12,
-    borderRadiusLG: 24,
-    controlHeight: 44,
-    controlHeightLG: 48,
+    colorPrimary: '#27b7aa',
+    colorPrimaryHover: '#17a79a',
+    colorInfo: '#27b7aa',
+    colorText: 'rgba(0, 0, 0, 0.85)',
+    colorTextSecondary: 'rgba(0, 0, 0, 0.65)',
+    colorTextPlaceholder: 'rgba(0, 0, 0, 0.45)',
+    colorTextDisabled: 'rgba(0, 0, 0, 0.25)',
+    colorBgContainer: '#ffffff',
+    colorBgElevated: '#ffffff',
+    colorBgLayout: '#f7f8fa',
+    colorBorder: '#d9d9d9',
+    colorBorderSecondary: '#e0e0e0',
+    borderRadius: 4,
+    borderRadiusLG: 8,
+    controlHeight: 40,
+    controlHeightLG: 44,
+    controlHeightSM: 32,
     fontSize: 14,
-    fontFamily: "'Nunito', 'Noto Sans SC', 'PingFang SC', sans-serif",
+    fontFamily:
+      "-apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif",
     motionDurationMid: '0.16s',
   },
   components: {
     Button: {
-      borderRadius: 24,
-      defaultBg: '#fffcf5',
-      defaultHoverBg: '#f7ebd9',
-      defaultHoverColor: '#38243b',
-      defaultHoverBorderColor: '#c5aa8c',
-      defaultShadow: '0 2px 0 #dfceba55',
-      primaryShadow: 'inset 0 2px 0 #ffffff30, 0 3px 0 #853823',
+      controlHeight: 36,
+      controlHeightLG: 36,
+      controlHeightSM: 32,
+      borderRadius: 2,
+      defaultColor: '#27b7aa',
+      defaultBorderColor: '#27b7aa',
+      defaultHoverBorderColor: '#17a79a',
+      defaultHoverColor: '#17a79a',
+      defaultShadow: 'none',
+      primaryShadow: 'none',
       fontWeight: 700,
+      fontSizeLG: 14,
+      paddingInline: 16,
+      paddingInlineSM: 12,
     },
-    Input: { activeShadow: '0 0 0 2px #b9503b26', fontSize: 16 },
-    InputNumber: { activeShadow: '0 0 0 2px #b9503b26', fontSize: 16 },
-    Select: { optionHeight: 44, optionSelectedBg: '#eee8f6', fontSize: 16 },
+    Input: {
+      hoverBorderColor: '#17a79a',
+      activeBorderColor: '#17a79a',
+      activeShadow: 'none',
+    },
+    InputNumber: {
+      hoverBorderColor: '#17a79a',
+      activeBorderColor: '#17a79a',
+      activeShadow: 'none',
+    },
+    Select: {
+      hoverBorderColor: '#17a79a',
+      activeBorderColor: '#17a79a',
+      optionSelectedBg: '#eff8f7',
+      optionSelectedColor: '#17a79a',
+      optionHeight: 40,
+    },
     Collapse: {
       headerBg: 'transparent',
       headerPadding: '8px 0',
       contentPadding: '0',
       contentBg: 'transparent',
     },
-    Modal: { borderRadiusLG: 24 },
+    Modal: { borderRadiusLG: 8 },
   },
 };
 
@@ -59,7 +81,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       theme={STUDIO_THEME}
       button={{ autoInsertSpace: false }}
     >
-      <App className="studio-ant-app">{children}</App>
+      <App className="min-h-svh">{children}</App>
     </ConfigProvider>
   );
 }

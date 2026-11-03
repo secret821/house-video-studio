@@ -1,6 +1,9 @@
 /** Offline video-editing contracts are independent from cloud portrait and photo drafts. */
 import { z } from 'zod';
-import { speechCaptionsSchema } from './subtitles';
+
+import { savedCopyDraftSchema } from './copy-result';
+import { propertyCandidateSchema } from './property-extraction';
+import { speechCaptionsSchema, speechCaptionSchema } from './subtitles';
 
 import {
   audioSchema,
@@ -10,6 +13,8 @@ import {
   jobSchema,
   VideoPreparation,
   VIDEO_PENDING_POSTER,
+  VideoTemplate,
+  videoTemplateSchema,
 } from './project';
 
 export enum VideoRole {
@@ -21,6 +26,11 @@ export enum CoverSource {
   House = 'house',
   Image = 'image',
 }
+/** Template presentation defaults; shared footage, authored copy and timing remain project data. */
+export const VIDEO_TEMPLATE_COVER_SOURCE_MAP = {
+  [VideoTemplate.Classic]: CoverSource.House,
+  [VideoTemplate.Editorial]: CoverSource.Opening,
+} as const;
 export const COVER_SOURCE_MAP = {
   [CoverSource.Opening]: '口播开场视频第一帧',
   [CoverSource.House]: '首份房屋素材（视频首帧 / 照片）',
@@ -43,6 +53,13 @@ export const importedVideoSchema = z
     height: z.number().int().positive().max(4096),
     hasAudio: z.boolean(),
     speechCaptions: speechCaptionsSchema.optional(),
+    // Staged edits are saved independently and never rendered until explicit adoption.
+    speechDraft: z
+      .array(
+        z.object({ ...speechCaptionSchema.shape, text: z.string().max(28) }),
+      )
+      .max(600)
+      .optional(),
   })
   .superRefine((video, context) => {
     if (
@@ -106,33 +123,58 @@ export const videoShotSchema = z
     text: z.string().max(100),
   })
   .refine((shot) => shot.end - shot.start >= 2, '每个房屋片段至少保留2秒。');
-export const videoEditSchema = z
-  .object({
-    sessionId: z.string().uuid().optional(),
-    opening: importedVideoSchema.nullable(),
-    house: importedVideoSchema.nullable(),
-    materials: z.array(houseMaterialSchema).max(12).default([]),
-    name: z.string().min(1).max(32),
-    facts: z.string().max(60),
-    price: z.string().max(20),
-    extra: z.string().max(40),
-    contact: z.string().max(50),
-    shots: z.array(videoShotSchema).max(12),
-    music: audioSchema.nullable(),
-    musicVolume: z.number().min(0).max(0.6),
-    watermark: watermarkTextSchema,
-    openingVolume: z.number().min(0).max(1.5),
-    houseVolume: z.number().min(0).max(1),
-    subtitlesEnabled: z.boolean().optional(),
-    transitionSeconds: z.number().min(0).max(0.8),
-    coverSource: z.enum(CoverSource).default(CoverSource.House),
-    coverImage: imagePathSchema.nullable().default(null),
-    coverSeconds: z
-      .number()
-      .min(0.5, '封面展示时长至少0.5秒。')
-      .max(10, '封面展示时长最多10秒。')
-      .default(1.2),
-  })
+export const videoEditTextFields = {
+  name: z.string().min(1).max(32),
+  facts: z.string().max(60),
+  price: z.string().max(20),
+  extra: z.string().max(40),
+};
+const videoEditFieldsSchema = z.object({
+  sourceText: z.string().max(12000).optional(),
+  propertyFields: z
+    .array(propertyCandidateSchema)
+    .max(10)
+    .nullable()
+    .optional(),
+  copyBrief: z.string().max(2000).optional(),
+  copyDraft: savedCopyDraftSchema.nullable().optional(),
+  sessionId: z.string().uuid().optional(),
+  videoTemplate: videoTemplateSchema,
+  opening: importedVideoSchema.nullable(),
+  house: importedVideoSchema.nullable(),
+  materials: z.array(houseMaterialSchema).max(12).default([]),
+  ...videoEditTextFields,
+  contact: z.string().max(50),
+  shots: z.array(videoShotSchema).max(12),
+  music: audioSchema.nullable(),
+  musicVolume: z.number().min(0).max(0.6),
+  watermark: watermarkTextSchema,
+  openingVolume: z.number().min(0).max(1.5),
+  houseVolume: z.number().min(0).max(1),
+  subtitlesEnabled: z.boolean().optional(),
+  transitionSeconds: z.number().min(0).max(0.8),
+  coverSource: z.enum(CoverSource).optional(),
+  coverImage: imagePathSchema.nullable().default(null),
+  coverSeconds: z
+    .number()
+    .min(0.5, '封面展示时长至少0.5秒。')
+    .max(10, '封面展示时长最多10秒。')
+    .default(1.2),
+});
+/** Drafts retain unfinished text while export keeps the stricter validation below. */
+function applyVideoDefaults(project: z.infer<typeof videoEditFieldsSchema>) {
+  return {
+    ...project,
+    coverSource:
+      project.coverSource ??
+      VIDEO_TEMPLATE_COVER_SOURCE_MAP[project.videoTemplate],
+  };
+}
+export const videoEditDraftSchema = videoEditFieldsSchema
+  .extend({ name: z.string().max(32) })
+  .transform(applyVideoDefaults);
+export const videoEditSchema = videoEditFieldsSchema
+  .transform(applyVideoDefaults)
   .superRefine((project, context) => {
     const clips = [
       project.opening,
@@ -186,6 +228,7 @@ export type VideoShot = z.infer<typeof videoShotSchema>;
 export type VideoEditProject = z.infer<typeof videoEditSchema>;
 export type VideoEditJob = z.infer<typeof videoEditJobSchema>;
 export const EMPTY_VIDEO_EDIT: VideoEditProject = {
+  videoTemplate: VideoTemplate.Classic,
   opening: null,
   house: null,
   materials: [],
@@ -201,7 +244,7 @@ export const EMPTY_VIDEO_EDIT: VideoEditProject = {
   openingVolume: 1,
   houseVolume: 1,
   transitionSeconds: 0.35,
-  coverSource: CoverSource.House,
+  coverSource: VIDEO_TEMPLATE_COVER_SOURCE_MAP[VideoTemplate.Classic],
   coverImage: null,
   coverSeconds: 1.2,
 };

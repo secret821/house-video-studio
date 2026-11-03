@@ -1,12 +1,13 @@
 /** Ordered house media supports handle dragging and explicit buttons for keyboard and assistive access. */
-import { Button } from 'antd';
-import clsx from 'clsx';
+import { Button, cn } from './common';
 import { HolderOutlined } from '@ant-design/icons';
 import { useId } from 'react';
 
 import { HouseMediaKind } from '@/services/definition/video-edit';
 
 import { useMaterialSort } from './use-material-sort';
+import { FileUpload } from './file-upload';
+import { UploadedVideoPreview } from './uploaded-video-preview';
 import type { useVideoEdit } from './use-video-edit';
 
 /** Keep the recorded opening fixed; house materials and their matching shots move as one group. */
@@ -26,7 +27,7 @@ export function MaterialOrderList({
       </p>
       <ol
         ref={sort.list}
-        className="studio-material-list"
+        className="grid list-none gap-4 p-0"
         aria-label="房屋素材顺序"
       >
         {materials.map((source, index) => {
@@ -38,14 +39,21 @@ export function MaterialOrderList({
             <li
               key={source.id}
               data-material-id={source.id}
-              className={clsx('studio-sort-row', {
-                'studio-sort-row-dragging': dragging,
-                'studio-sort-row-target': target,
-              })}
+              className={cn(
+                'relative min-w-0 rounded border-t border-line py-4',
+                {
+                  'bg-panel opacity-65': dragging,
+                  'outline-2 outline-dashed outline-primary outline-offset-4':
+                    target,
+                },
+              )}
             >
               <div className="flex min-w-0 items-center gap-3">
                 <Button
-                  className="island-action studio-drag-handle"
+                  className="!cursor-grab touch-none select-none !text-muted active:!cursor-grabbing [&_.anticon]:text-heading-4"
+                  type="text"
+                  size="small"
+                  icon={<HolderOutlined aria-hidden="true" />}
                   aria-label={`拖动排序素材${index + 1}`}
                   aria-describedby={hint}
                   disabled={busy || materials.length < 2}
@@ -64,16 +72,24 @@ export function MaterialOrderList({
                       );
                     }
                   }}
-                >
-                  <HolderOutlined aria-hidden="true" />
-                </Button>
-                <img
-                  src={image ? source.src : source.video.poster}
-                  alt={`房屋素材${index + 1}`}
-                  className="h-20 w-14 shrink-0 rounded-lg object-cover"
-                  draggable={false}
                 />
-                <p className="min-w-0 text-sm break-words text-body">
+                {image && (
+                  <img
+                    src={source.src}
+                    alt={`房屋素材${index + 1}`}
+                    className="h-20 w-14 shrink-0 rounded-lg object-cover"
+                    draggable={false}
+                  />
+                )}
+                {!image && (
+                  <UploadedVideoPreview
+                    key={source.video.src}
+                    video={source.video}
+                    label={`房屋视频${index + 1}`}
+                    disabled={busy || Boolean(sort.drag)}
+                  />
+                )}
+                <p className="min-w-0 text-sm break-words text-content">
                   {index + 1}. {name}
                   <span className="block text-xs text-muted">
                     {image
@@ -83,11 +99,26 @@ export function MaterialOrderList({
                 </p>
               </div>
               {target && (
-                <p className="studio-drop-hint">松开移到第{index + 1}位</p>
+                <p
+                  className={cn(
+                    'absolute -top-3 right-2 rounded bg-primary px-2 py-0.5',
+                    'text-caption text-white',
+                  )}
+                >
+                  松开移到第{index + 1}位
+                </p>
               )}
-              <div className="mt-3 flex justify-end">
+              <div className="mt-3 flex flex-wrap items-center justify-end gap-3">
+                <FileUpload
+                  compact
+                  label={`替换素材${index + 1}`}
+                  accept={image ? '.jpg,.jpeg,.png,.webp' : '.mp4,.mov'}
+                  disabled={busy || Boolean(sort.drag)}
+                  onFiles={(files) =>
+                    editor.replaceMaterial(source.id, files[0])
+                  }
+                />
                 <Button
-                  className="island-action"
                   aria-label={`移除素材${index + 1}`}
                   disabled={busy || Boolean(sort.drag)}
                   onClick={() => editor.removeMaterial(source.id)}

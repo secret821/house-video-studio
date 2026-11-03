@@ -29,6 +29,7 @@ export function useVideoUpload() {
     null,
   );
   const mounted = useRef(true);
+  const cancelRevision = useRef(0);
   let active = local ?? remote;
   if (local && remote?.id === local.id)
     active = {
@@ -76,6 +77,7 @@ export function useVideoUpload() {
     return () => {
       live = false;
       mounted.current = false;
+      cancelRevision.current += 1;
       clearTimeout(timer);
       operation.current?.controller.abort();
     };
@@ -110,19 +112,26 @@ export function useVideoUpload() {
       startedAt,
       deadline: startedAt + VIDEO_UPLOAD_TIMEOUT_MS,
     });
-    return send(file, { id, signal: controller.signal }).finally(() => {
-      if (operation.current?.id === id) operation.current = null;
-      if (mounted.current) {
-        setLocal(null);
-        setRemote((current) => (current?.id === id ? null : current));
-      }
-    });
+    return send(file, { id, signal: controller.signal })
+      .then((value) => {
+        controller.signal.throwIfAborted();
+        if (!mounted.current) throw new Error('上传页面已关闭。');
+        return value;
+      })
+      .finally(() => {
+        if (operation.current?.id === id) operation.current = null;
+        if (mounted.current) {
+          setLocal(null);
+          setRemote((current) => (current?.id === id ? null : current));
+        }
+      });
   }
 
   /** An ID-scoped cancel can safely be clicked from a second device in this shared workspace. */
   function cancelUpload() {
     if (!active || cancelling) return;
     const id = active.id;
+    cancelRevision.current += 1;
     setCancelling(true);
     setError('');
     if (operation.current?.id === id) operation.current.controller.abort();
@@ -143,6 +152,13 @@ export function useVideoUpload() {
   }
 
   return {
+    guardBatch: () => {
+      const revision = cancelRevision.current;
+      return () => {
+        if (!mounted.current || revision !== cancelRevision.current)
+          throw new Error('已终止本批上传，已保存的素材保留，可重新选择视频。');
+      };
+    },
     active,
     temporaryMedia,
     busy: Boolean(active || cancelling),

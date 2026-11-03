@@ -1,14 +1,23 @@
 'use client';
 
 /** Both editors share the same session and explicit sign-out action. */
-import { Alert, Button, Modal } from 'antd';
+import { Alert, Button, Modal, cn } from './common';
 import { useEffect, useState } from 'react';
+import { LogoutOutlined } from '@ant-design/icons';
 
 import { authApi } from './auth-api';
 
-export function SessionControl({ disabled = false }: { disabled?: boolean }) {
-  const [username, setUsername] = useState<string | null>(null);
-  const [enabled, setEnabled] = useState(false);
+export function SessionControl({
+  disabled = false,
+  refreshKey = 0,
+}: {
+  disabled?: boolean;
+  refreshKey?: number;
+}) {
+  const [session, setSession] = useState<Awaited<
+    ReturnType<typeof authApi.getSession>
+  > | null>(null);
+  const enabled = session?.enabled ?? false;
   const [confirming, setConfirming] = useState(false);
   const [sessionLost, setSessionLost] = useState(false);
   const [checkAttempt, setCheckAttempt] = useState(0);
@@ -20,11 +29,13 @@ export function SessionControl({ disabled = false }: { disabled?: boolean }) {
     function checkSession() {
       if (checking) return;
       checking = true;
+      setSession(null);
+      setError('');
       return authApi
         .getSession({ editorCheck: true })
         .then((session) => {
           if (disposed) return;
-          setEnabled(session.enabled);
+          setSession(session);
           if (session.enabled && !session.authenticated) {
             // Keep unsaved form contents visible; only the user chooses when to leave.
             setSessionLost(true);
@@ -33,12 +44,14 @@ export function SessionControl({ disabled = false }: { disabled?: boolean }) {
             );
             return;
           }
-          setUsername(session.username);
           setSessionLost(false);
           setError('');
         })
         .catch(() => {
-          if (!disposed) setError('暂时无法检查登录，页面内容仍保留。');
+          if (!disposed) {
+            setSession(null);
+            setError('暂时无法检查登录，页面内容仍保留。');
+          }
         })
         .finally(() => {
           checking = false;
@@ -53,7 +66,7 @@ export function SessionControl({ disabled = false }: { disabled?: boolean }) {
       disposed = true;
       window.removeEventListener('pageshow', handlePageShow);
     };
-  }, [checkAttempt]);
+  }, [checkAttempt, refreshKey]);
   /** A single unexpected click must not immediately revoke a week-long login. */
   function logout() {
     if (!confirming || pending || disabled) return;
@@ -67,20 +80,38 @@ export function SessionControl({ disabled = false }: { disabled?: boolean }) {
         setPending(false);
       });
   }
+  let accountLabel = '正在读取…';
+  if (session) {
+    if (!session.enabled) accountLabel = '本机工作室';
+    else if (session.authenticated && session.username)
+      accountLabel = session.username;
+    else accountLabel = '登录状态已失效';
+  } else if (error) accountLabel = '暂时无法读取';
+  const logoutDisabled =
+    disabled || pending || !enabled || !session?.authenticated || sessionLost;
   return (
     <>
-      {username && <span className="text-sm text-muted">账号：{username}</span>}
-      {enabled && !sessionLost && !confirming && (
-        <Button
-          htmlType="button"
-          className="island-action"
-          disabled={disabled || pending}
-          onClick={() => setConfirming(true)}
-        >
-          {pending ? '正在退出…' : '退出登录'}
-        </Button>
+      <div
+        className="grid gap-1 border-t border-line p-3 break-words"
+        role="status"
+      >
+        <span className="text-xs text-muted">当前账号</span>
+        <strong className="text-sm text-content">{accountLabel}</strong>
+      </div>
+      <Button
+        htmlType="button"
+        icon={<LogoutOutlined />}
+        danger
+        disabled={logoutDisabled}
+        onClick={() => setConfirming(true)}
+      >
+        {pending ? '正在退出…' : '退出登录'}
+      </Button>
+      {session && !enabled && (
+        <p className="px-3 text-xs text-muted">本机模式未启用账号登录。</p>
       )}
       <Modal
+        className="studio-ui"
         title="确认退出登录"
         open={enabled && !sessionLost && confirming}
         centered
@@ -105,18 +136,25 @@ export function SessionControl({ disabled = false }: { disabled?: boolean }) {
           {error}
         </span>
       )}
-      {sessionLost && (
+      {(sessionLost || (error && !session)) && (
         <>
           <Button
             htmlType="button"
-            className="island-action"
             onClick={() => setCheckAttempt((attempt) => attempt + 1)}
           >
             重新检查登录
           </Button>
-          <Button className="studio-mode-link" href="/login">
-            重新登录
-          </Button>
+          {sessionLost && (
+            <Button
+              className={cn(
+                '!flex !min-h-10 !items-center !rounded',
+                '!px-3 !py-2 hover:!bg-primary-soft',
+              )}
+              href="/login"
+            >
+              重新登录
+            </Button>
+          )}
         </>
       )}
     </>

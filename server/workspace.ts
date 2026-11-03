@@ -1,7 +1,15 @@
-/** Authenticated account scopes own temporary files and task state; browser drafts never belong here. */
+/** Account uploads/drafts survive restart; jobs, render caches and exports remain temporary. */
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+} from 'node:fs';
 import { resolve } from 'node:path';
 
 export const TEMPORARY_MEDIA = process.env.STUDIO_TEMPORARY_MEDIA === '1';
@@ -17,17 +25,51 @@ const scope = new AsyncLocalStorage<Workspace>();
 const workspaces = new Map<string, Workspace>();
 let temporaryRoot: string | null = null;
 
+/** Server-owned identities alone select the stable namespace; requests cannot supply these paths. */
+function currentDirectory(id: string) {
+  const directory = resolve(process.cwd(), 'data', 'current', id);
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
+  return directory;
+}
+
+/** Upgrade existing uploads before removing process scratch; moving on the same volume copies no video bytes. */
+function preserveUploads(directory: string) {
+  readdirSync(directory, { withFileTypes: true }).forEach((entry) => {
+    if (!/^(legacy|[a-f0-9-]{36})$/.test(entry.name)) return;
+    if (!entry.isDirectory() || entry.isSymbolicLink())
+      throw new Error('旧账号目录异常，已停止清理，请管理员检查。');
+    const uploads = resolve(directory, entry.name, 'uploads');
+    if (!existsSync(uploads)) return;
+    if (lstatSync(uploads).isSymbolicLink())
+      throw new Error('旧素材目录异常，已停止清理，请管理员检查。');
+    const target = resolve(currentDirectory(entry.name), 'uploads');
+    mkdirSync(target, { recursive: true, mode: 0o700 });
+    readdirSync(uploads, { withFileTypes: true }).forEach((file) => {
+      if (!file.isFile() || file.isSymbolicLink())
+        throw new Error('旧素材文件异常，已停止清理，请管理员检查。');
+      const destination = resolve(target, file.name);
+      if (existsSync(destination))
+        throw new Error('旧素材迁移遇到同名文件，已保留原文件，请管理员检查。');
+      renameSync(resolve(uploads, file.name), destination);
+    });
+  });
+}
+
 /** The temporary directory is on the service's data disk, not a RAM-backed /run directory. */
 function getTemporaryRoot(): string {
   if (!temporaryRoot) {
     const directory = resolve(process.cwd(), 'data', 'temporary');
     mkdirSync(directory, { recursive: true, mode: 0o700 });
-    // Deployment is single-instance. A restart never revives previous process media.
+    // Deployment is single-instance. Keep accepted originals, never revive old jobs/caches.
     readdirSync(directory)
       .filter((name) => /^session-[a-zA-Z0-9]+$/.test(name))
-      .forEach((name) =>
-        rmSync(resolve(directory, name), { recursive: true, force: true }),
-      );
+      .forEach((name) => {
+        const previous = resolve(directory, name);
+        if (lstatSync(previous).isSymbolicLink())
+          throw new Error('旧工作室目录异常，已停止清理。');
+        preserveUploads(previous);
+        rmSync(previous, { recursive: true, force: true });
+      });
     temporaryRoot = mkdtempSync(resolve(directory, 'session-'));
   }
   return temporaryRoot;
@@ -61,18 +103,41 @@ export function runInWorkspace<T>(workspace: Workspace, action: () => T): T {
 export function findWorkspace(id: string) {
   return workspaces.get(id);
 }
-/** New deployments use disposable process/account directories; CLI compatibility does not migrate old data. */
+/** Retain account originals/current drafts; processing and exports keep their disposable process scope. */
 export function workspaceDirectory(...parts: Array<string>): string {
   const id = getWorkspace().id;
   const base = resolve(process.cwd(), 'data');
-  const root = TEMPORARY_MEDIA
-    ? resolve(getTemporaryRoot(), id)
+  const temporary = TEMPORARY_MEDIA ? getTemporaryRoot() : null;
+  const retained = parts[0] === 'uploads' || parts[0] === 'drafts';
+  const root = temporary
+    ? retained
+      ? currentDirectory(id)
+      : resolve(temporary, id)
     : id === 'legacy'
       ? base
       : resolve(base, 'workspaces', id);
   const directory = resolve(root, ...parts);
-  mkdirSync(directory, { recursive: true });
+  mkdirSync(directory, { recursive: true, mode: 0o700 });
   return directory;
+}
+
+/** Quota includes durable originals and temporary work; the two roots never overlap in public mode. */
+export function workspaceStorageDirectories(): Array<string> {
+  const directories = [workspaceDirectory()];
+  if (TEMPORARY_MEDIA) directories.push(currentDirectory(getWorkspace().id));
+  return directories;
+}
+
+/** Cleanup visits only known stable account directories, never a whole-disk or mtime scan. */
+export function retainedWorkspaceIds(): Array<string> {
+  const root = resolve(process.cwd(), 'data', 'current');
+  if (!existsSync(root)) return [];
+  return readdirSync(root, { withFileTypes: true })
+    .filter(
+      (entry) =>
+        entry.isDirectory() && /^(legacy|[a-f0-9-]{36})$/.test(entry.name),
+    )
+    .map((entry) => entry.name);
 }
 /** Shared templates and process locks contain no account media and cannot be removed by another account's idle cleanup. */
 export function sharedWorkspaceDirectory(...parts: Array<string>): string {

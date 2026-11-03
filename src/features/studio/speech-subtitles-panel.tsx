@@ -13,7 +13,8 @@ import {
   Collapse,
   InputNumber,
   Popconfirm,
-} from 'antd';
+  ButtonAppearance,
+} from './common';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { JobStatus } from '@/services/definition/project';
@@ -33,7 +34,8 @@ export function SpeechSubtitlesPanel({
 }: {
   editor: ReturnType<typeof useVideoEdit>;
 }) {
-  const { project, busy, setSubtitleBusy, updateSubtitles } = editor;
+  const { project, busy, setSubtitleBusy, updateSubtitles, stageSpeechDraft } =
+    editor;
   const [capability, setCapability] = useState({
     ready: false,
     message: '正在检查本地原声识别…',
@@ -41,14 +43,13 @@ export function SpeechSubtitlesPanel({
   const [selection, setSelection] = useState('opening');
   const [job, setJob] = useState<SubtitleJob | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  const [drafts, setDrafts] = useState<Record<string, SpeechCaption[]>>({});
   const [error, setError] = useState('');
   const [page, setPage] = useState(0);
   const alive = useRef(true);
   const received = useRef(new Set<string>());
   const clips = getSpeechVideos(project);
   const selected = clips.find((clip) => clip.key === selection) ?? clips[0];
-  const draft = selected && drafts[selected.video.src];
+  const draft = selected?.video.speechDraft;
   const captions = draft ?? selected?.video.speechCaptions ?? [];
   const changed =
     draft !== undefined && draft !== selected?.video.speechCaptions;
@@ -125,9 +126,9 @@ export function SpeechSubtitlesPanel({
     received.current.add(job.id);
     if (!getSpeechVideos(project).some(({ video }) => video.src === job.src))
       return;
-    setDrafts((current) => ({ ...current, [job.src]: job.captions }));
+    stageSpeechDraft({ src: job.src, captions: job.captions });
     setPage(0);
-  }, [job, project]);
+  }, [job, project, stageSpeechDraft]);
 
   useEffect(() => {
     if (!polling || !jobId) return;
@@ -170,8 +171,7 @@ export function SpeechSubtitlesPanel({
   }, [polling, jobId]);
 
   function stage(next: Array<SpeechCaption>) {
-    if (selected)
-      setDrafts((current) => ({ ...current, [selected.video.src]: next }));
+    if (selected) stageSpeechDraft({ src: selected.video.src, captions: next });
   }
   function adopt() {
     if (!selected || busy || validationMessage || !changed) return;
@@ -223,7 +223,7 @@ export function SpeechSubtitlesPanel({
                 {selected && (
                   <>
                     <label className="block">
-                      <span className="studio-label">
+                      <span className="mb-2 block text-body font-medium">
                         查看或修改哪份视频的字幕
                       </span>
                       <div className="island-select">
@@ -256,7 +256,6 @@ export function SpeechSubtitlesPanel({
                         onConfirm={() => recognize(selected.video.src)}
                       >
                         <Button
-                          className="island-action"
                           icon={<AudioOutlined />}
                           disabled={!canRecognize || recognizing}
                           loading={recognizing}
@@ -269,9 +268,7 @@ export function SpeechSubtitlesPanel({
                         </Button>
                       </Popconfirm>
                       {recognizing && job && (
-                        <Button className="island-action" onClick={cancel}>
-                          取消识别
-                        </Button>
+                        <Button onClick={cancel}>取消识别</Button>
                       )}
                     </Flex>
                     {draft?.length === 0 && (
@@ -312,7 +309,9 @@ export function SpeechSubtitlesPanel({
                           >
                             <div className="grid grid-cols-2 gap-3">
                               <label>
-                                <span className="studio-label">开始 / 秒</span>
+                                <span className="mb-2 block text-body font-medium">
+                                  开始 / 秒
+                                </span>
                                 <InputNumber
                                   min={0}
                                   step={0.01}
@@ -328,7 +327,9 @@ export function SpeechSubtitlesPanel({
                                 />
                               </label>
                               <label>
-                                <span className="studio-label">结束 / 秒</span>
+                                <span className="mb-2 block text-body font-medium">
+                                  结束 / 秒
+                                </span>
                                 <InputNumber
                                   min={0}
                                   step={0.01}
@@ -345,7 +346,9 @@ export function SpeechSubtitlesPanel({
                               </label>
                             </div>
                             <label className="mt-3 block">
-                              <span className="studio-label">字幕文字</span>
+                              <span className="mb-2 block text-body font-medium">
+                                字幕文字
+                              </span>
                               <Input.TextArea
                                 autoSize={{ minRows: 2, maxRows: 4 }}
                                 value={cue.text}
@@ -358,7 +361,7 @@ export function SpeechSubtitlesPanel({
                               />
                             </label>
                             <Button
-                              className="island-action mt-3"
+                              className="mt-3"
                               icon={<DeleteOutlined />}
                               danger
                               disabled={busy}
@@ -376,7 +379,6 @@ export function SpeechSubtitlesPanel({
                     {captions.length > PAGE_SIZE && (
                       <Flex wrap align="center" gap={12}>
                         <Button
-                          className="island-action"
                           disabled={shownPage === 0}
                           onClick={() => setPage(shownPage - 1)}
                         >
@@ -387,7 +389,6 @@ export function SpeechSubtitlesPanel({
                           {Math.ceil(captions.length / PAGE_SIZE)}
                         </span>
                         <Button
-                          className="island-action"
                           disabled={
                             (shownPage + 1) * PAGE_SIZE >= captions.length
                           }
@@ -418,9 +419,8 @@ export function SpeechSubtitlesPanel({
                       onConfirm={adopt}
                     >
                       <Button
-                        className="island-action"
                         icon={<CheckOutlined />}
-                        type="primary"
+                        appearance={ButtonAppearance.Solid}
                         disabled={
                           !changed || busy || Boolean(validationMessage)
                         }
@@ -440,15 +440,9 @@ export function SpeechSubtitlesPanel({
                             captions: [],
                             onlyMissing: false,
                           });
-                          setDrafts((current) => {
-                            const next = { ...current };
-                            delete next[selected.video.src];
-                            return next;
-                          });
                         }}
                       >
                         <Button
-                          className="island-action"
                           icon={<DeleteOutlined />}
                           danger
                           disabled={busy}
@@ -460,7 +454,7 @@ export function SpeechSubtitlesPanel({
                   </Flex>
                 )}
                 <Checkbox
-                  className="studio-caption-visibility text-sm text-ink"
+                  className="self-start text-sm text-ink"
                   checked={project.subtitlesEnabled ?? false}
                   disabled={busy}
                   onChange={(event) =>

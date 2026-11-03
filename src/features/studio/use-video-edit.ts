@@ -3,12 +3,19 @@ import { VIDEO_UPLOAD_MAX_BYTES } from '../../services/definition/video-upload';
 import { useCallback, useEffect, useState } from 'react';
 import { musicApi } from './music-api';
 import type { MusicChoice } from '@/services/definition/music-library';
+import type { SpeechCaption } from '@/services/definition/subtitles';
 import { createMediaId } from '../../services/definition/media-id';
 
-import { JobStatus } from '../../services/definition/project';
+import {
+  JobStatus,
+  VideoTemplate,
+  VIDEO_TEMPLATE_MAP,
+} from '../../services/definition/project';
 import {
   EMPTY_VIDEO_EDIT,
   CoverSource,
+  VIDEO_TEMPLATE_COVER_SOURCE_MAP,
+  COVER_SOURCE_MAP,
   VideoRole,
   HouseMediaKind,
   getHouseMaterials,
@@ -27,6 +34,8 @@ import {
 import api from './video-edit-api';
 import studioApi from './api';
 import { useVideoUpload } from './use-video-upload';
+import { useCurrentDraft } from './use-current-draft';
+import { useBackgroundJob } from './use-background-job';
 import { reorderHouseMaterials } from './material-order';
 import { updateSpeechCaptions } from './speech-subtitles';
 
@@ -34,6 +43,12 @@ import { updateSpeechCaptions } from './speech-subtitles';
 export function useVideoEdit() {
   const upload = useVideoUpload();
   const [project, setProject] = useState<VideoEditProject>(EMPTY_VIDEO_EDIT);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const currentDraft = useCurrentDraft({
+    project,
+    loaded: draftLoaded,
+    save: api.saveDraft,
+  });
   const [work, setWork] = useState<string | null>('正在读取本地视频草稿…');
   const [elapsed, setElapsed] = useState(0);
   const [notice, setNotice] = useState({ text: '', error: false });
@@ -46,6 +61,18 @@ export function useVideoEdit() {
   const updateSubtitles = useCallback(
     (options: Parameters<typeof updateSpeechCaptions>[1]) => {
       setProject((current) => updateSpeechCaptions(current, options));
+    },
+    [],
+  );
+  const stageSpeechDraft = useCallback(
+    (options: { src: string; captions: Array<SpeechCaption> }) => {
+      setProject((current) =>
+        updateSpeechCaptions(current, {
+          ...options,
+          onlyMissing: false,
+          draftOnly: true,
+        }),
+      );
     },
     [],
   );
@@ -70,24 +97,43 @@ export function useVideoEdit() {
   }, [work]);
 
   /** Display a rejected operation with enough context to retry explicitly. */
-  function reportError(error: unknown) {
+  const reportError = useCallback((error: unknown) => {
     setNotice({
       text: error instanceof Error ? error.message : '操作失败，请重试。',
       error: true,
     });
-  }
+  }, []);
   useEffect(() => {
     let active = true;
-    Promise.all([api.getDraft(), api.getLatestJob()])
-      .then(([{ project: draft, mediaExpired }, latest]) => {
+    Promise.all([
+      api.getDraft().then((draft) => {
+        if (active) {
+          setProject(draft.project);
+          setDraftLoaded(true);
+        }
+        return draft;
+      }),
+      api.getLatestJob().then((latest) => {
+        if (active && latest?.status === JobStatus.Rendering) setJob(latest);
+        return latest;
+      }),
+    ])
+      .then(([{ project: draft, mediaExpired, mediaError }, latest]) => {
         if (active) {
           setProject(draft);
-          if (mediaExpired)
+          if (mediaExpired || mediaError)
             setNotice({
-              text: '草稿文案已恢复，但临时素材已过期或服务已重启，请重新上传素材后生成。',
+              text:
+                mediaError ??
+                '旧草稿文字已恢复，部分素材没有本地备份且已过期，请重新上传这些素材。',
               error: true,
             });
-          setJob(latest?.sessionId === draft.sessionId ? latest : null);
+          setJob(
+            latest?.status === JobStatus.Rendering ||
+              latest?.sessionId === draft.sessionId
+              ? latest
+              : null,
+          );
         }
       })
       .catch((error: unknown) => {
@@ -99,35 +145,12 @@ export function useVideoEdit() {
     return () => {
       active = false;
     };
-  }, []);
-  const id = job?.id;
-  useEffect(() => {
-    if (!rendering || !id) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    /** Serialize polls and retain an observable retry state when the local server is unavailable. */
-    function poll() {
-      api
-        .getJob(id!)
-        .then((next) => {
-          if (!active) return;
-          setJob(next);
-          if (next.status === JobStatus.Rendering)
-            timer = setTimeout(poll, 1000);
-        })
-        .catch((error: unknown) => {
-          if (active) {
-            reportError(error);
-            timer = setTimeout(poll, 3000);
-          }
-        });
-    }
-    poll();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [id, rendering]);
+  }, [reportError]);
+  useBackgroundJob(job, {
+    read: api.getJob,
+    onChange: setJob,
+    onError: reportError,
+  });
 
   /** Preserve uploaded media across reloads without touching the existing photo-tour draft. */
   function saveUpdated(next: VideoEditProject) {
@@ -146,7 +169,7 @@ export function useVideoEdit() {
     upload
       .uploadVideo(file)
       .then((asset) => {
-        setWork('原片已上传，正在保存浏览器草稿…');
+        setWork('原片已上传，正在保存草稿数据…');
         if (role === VideoRole.Opening)
           return saveUpdated({ ...project, opening: asset });
         if (asset.duration < 2)
@@ -165,6 +188,22 @@ export function useVideoEdit() {
   function patch(patch: Partial<VideoEditProject>) {
     setProject((current) => ({ ...current, ...patch }));
   }
+  function selectTemplate(videoTemplate: VideoTemplate) {
+    if (busy) return;
+    const coverSource = VIDEO_TEMPLATE_COVER_SOURCE_MAP[videoTemplate];
+    if (
+      videoTemplate === project.videoTemplate &&
+      coverSource === project.coverSource
+    )
+      return;
+    // Re-clicking a selected template can reapply its presentation defaults after a manual cover change.
+    const next = { ...project, videoTemplate, coverSource };
+    setProject(next);
+    setNotice({
+      text: `已切换为${VIDEO_TEMPLATE_MAP[videoTemplate].name}，封面使用${COVER_SOURCE_MAP[next.coverSource]}，文字和片尾样式同步切换；素材和房源信息保留。`,
+      error: false,
+    });
+  }
   /** A segment's timing and copy are edited as a single entity with a stable identifier. */
   function patchShot(id: string, patch: Partial<VideoShot>) {
     setProject((current) => ({
@@ -174,15 +213,34 @@ export function useVideoEdit() {
       ),
     }));
   }
-  /** Persist the exact preview snapshot before submitting its local render. */
+  /** Submit the frozen snapshot immediately; browser draft backup never controls server execution. */
   function exportVideo() {
     setWork('正在提交免费本地导出…');
     setNotice({ text: '', error: false });
     api
-      .saveDraft(project)
-      .then(() => api.createJob(project))
+      .createJob(project)
       .then(setJob)
-      .catch(reportError)
+      .catch((failure: unknown) =>
+        api
+          .getLatestJob()
+          .then((latest) => {
+            if (
+              latest &&
+              latest.id !== job?.id &&
+              latest.status !== JobStatus.Failed &&
+              latest.sessionId === project.sessionId &&
+              (latest.videoTemplate ?? VideoTemplate.Classic) ===
+                project.videoTemplate
+            ) {
+              setJob(latest);
+              setNotice({
+                text: '已找回服务端接收的后台任务，可以切换应用，回来后继续查看进度。',
+                error: false,
+              });
+            } else reportError(failure);
+          })
+          .catch(() => reportError(failure)),
+      )
       .finally(() => setWork(null));
   }
 
@@ -212,10 +270,12 @@ export function useVideoEdit() {
       })),
     };
     const selected = Array.from(files);
+    const assertActive = upload.guardBatch();
     selected
       .reduce(
         (chain, file, index) =>
           chain.then(() => {
+            assertActive();
             setWork(
               `正在上传第${index + 1}/${selected.length}份素材“${file.name}”，转码将在生成成片时进行…`,
             );
@@ -243,6 +303,7 @@ export function useVideoEdit() {
                   duration: 30,
                 }));
             return pending.then((source) => {
+              assertActive();
               setWork(
                 `第${index + 1}/${selected.length}份素材上传完成，正在保存草稿…`,
               );
@@ -253,7 +314,7 @@ export function useVideoEdit() {
               };
               return saveUpdated(next).then(() =>
                 setNotice({
-                  text: `已添加${next.materials.length}份房屋素材，草稿已保存到当前浏览器。`,
+                  text: `已添加${next.materials.length}份房屋素材，草稿已保存到当前账号。`,
                   error: false,
                 }),
               );
@@ -264,11 +325,65 @@ export function useVideoEdit() {
       .catch(reportError)
       .finally(() => setWork(null));
   }
+
+  /** Replace one source atomically; preserve its position and copy, bounding ranges to the new clip. */
+  function replaceMaterial(id: string, file: File | undefined) {
+    const source = materials.find((item) => item.id === id);
+    if (!file || !source || busy) return;
+    const video = source.kind === HouseMediaKind.Video;
+    if (file.size > (video ? VIDEO_UPLOAD_MAX_BYTES : 20 * 1024 * 1024)) {
+      reportError(new Error('替换文件超出大小限制。'));
+      return;
+    }
+    setWork(`正在替换“${file.name}”，完成前保留原素材…`);
+    setNotice({ text: '', error: false });
+    const pending: Promise<HouseMaterial> = video
+      ? upload.uploadVideo(file).then((asset) => {
+          if (asset.duration < 2) throw new Error('房屋视频至少需要2秒。');
+          return { id, kind: HouseMediaKind.Video, video: asset };
+        })
+      : studioApi.uploadImage(file).then((asset) => ({ ...source, ...asset }));
+    pending
+      .then((replacement) => {
+        const duration =
+          replacement.kind === HouseMediaKind.Video
+            ? replacement.video.duration
+            : replacement.duration;
+        return saveUpdated({
+          ...project,
+          house: null,
+          materials: materials.map((item) =>
+            item.id === id ? replacement : item,
+          ),
+          shots: project.shots.map((shot) => {
+            if (getShotMaterial(materials, shot)?.id !== id) return shot;
+            return {
+              ...shot,
+              sourceId: id,
+              start: Math.min(shot.start, duration - 2),
+              end: Math.min(shot.end, duration),
+            };
+          }),
+        });
+      })
+      .then(() =>
+        setNotice({
+          text: '素材已替换，顺序和文案已保留，片段范围已适配新时长。',
+          error: false,
+        }),
+      )
+      .catch(reportError)
+      .finally(() => setWork(null));
+  }
   return {
+    replaceMaterial,
+    selectTemplate,
     setSubtitleBusy,
     updateSubtitles,
+    stageSpeechDraft,
     setCleanBusy,
     project,
+    draftStatus: currentDraft.status,
     upload,
     materials,
     job,
@@ -278,33 +393,28 @@ export function useVideoEdit() {
     inputError,
     ready,
     newProject: () => {
-      const next = {
-        ...EMPTY_VIDEO_EDIT,
-        name: '新房源视频',
-        facts: '',
-        price: '',
-        extra: '',
-        contact: '',
-        sessionId: createMediaId(),
-      };
       setWork('正在新建房源视频…');
       setNotice({ text: '', error: false });
       api
-        .saveDraft(next)
-        .then(() => {
-          setProject(next);
-          setJob(null);
-          setNotice({
-            text: '已新建空房源视频，草稿已保存到当前浏览器。原始素材与历史成片保留。',
-            error: false,
-          });
-        })
+        .createDraft()
+        .then((next) =>
+          api.saveDraft(next).then(() => {
+            setProject(next);
+            setDraftLoaded(true);
+            setJob(null);
+            setNotice({
+              text: '已新建空房源视频，已加入默认轻钢琴配乐；可在声音设置更换或关闭。',
+              error: false,
+            });
+          }),
+        )
         .catch(reportError)
         .finally(() => setWork(null));
     },
     patch,
     patchShot,
     uploadVideo,
+    removeOpening: () => patch({ opening: null }),
     addHouseMedia,
     removeMaterial: (id: string) =>
       patch({
@@ -342,8 +452,8 @@ export function useVideoEdit() {
     exportVideo,
     save: () => {
       setWork('正在保存…');
-      api
-        .saveDraft(project)
+      currentDraft
+        .save()
         .then(() =>
           setNotice({
             text: '免费视频草稿已保存，照片模式草稿保持独立。',

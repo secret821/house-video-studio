@@ -1,5 +1,12 @@
 /** Shared contract validates browser drafts and all rendering input. */
 import { z } from 'zod';
+
+import { savedCopyDraftSchema } from './copy-result';
+
+export enum DraftKind {
+  Photo = 'photo',
+  Video = 'video',
+}
 import { musicCreditSchema } from './music-library';
 
 export enum Motion {
@@ -22,6 +29,27 @@ export enum JobStatus {
   Complete = 'complete',
   Failed = 'failed',
 }
+/** Stable visual selection is stored in both editor drafts; old projects keep their original appearance. */
+export enum VideoTemplate {
+  Classic = 'classic',
+  Editorial = 'editorial',
+}
+export const VIDEO_TEMPLATE_MAP = {
+  [VideoTemplate.Classic]: {
+    name: '经典实拍',
+    description: '白色大字 · 原有字幕样式',
+    coverDescription:
+      '默认封面底图：首份房屋素材（视频取首帧，照片直接使用），可手动更换。',
+  },
+  [VideoTemplate.Editorial]: {
+    name: '杂志留白',
+    description: '橙金衬线大字 · 上方留白',
+    coverDescription: '默认封面底图：口播开场视频的第一帧，可手动更换。',
+  },
+};
+export const videoTemplateSchema = z
+  .enum(VideoTemplate)
+  .default(VideoTemplate.Classic);
 export const MOTION_MAP = {
   [Motion.Push]: '缓慢推近',
   [Motion.Pull]: '缓慢拉远',
@@ -122,7 +150,11 @@ export type Opening = z.infer<typeof openingSchema>;
 export type OpeningJob = z.infer<typeof openingJobSchema>;
 export type VideoAsset = z.infer<typeof videoAssetSchema>;
 export const projectSchema = z.object({
+  sourceText: z.string().max(12000).optional(),
+  copyBrief: z.string().max(2000).optional(),
+  copyDraft: savedCopyDraftSchema.nullable().optional(),
   sessionId: z.string().uuid().optional(),
+  videoTemplate: videoTemplateSchema,
   name: z.string().min(1).max(60),
   location: z.string().max(80),
   area: z.string().max(30),
@@ -140,8 +172,13 @@ export const projectSchema = z.object({
   music: audioSchema.nullable(),
   musicVolume: z.number().min(0).max(0.5),
 });
+/** A temporarily empty title must survive autosave; render validation still requires a title. */
+export const projectDraftSchema = projectSchema.extend({
+  name: z.string().max(60),
+});
 export const jobSchema = z.object({
   sessionId: z.string().uuid().optional(),
+  videoTemplate: z.enum(VideoTemplate).optional(),
   id: z.string(),
   status: z.enum(JobStatus),
   progress: z.number().min(0).max(1),
@@ -160,6 +197,7 @@ export type Project = z.infer<typeof projectSchema>;
 export type AudioAsset = z.infer<typeof audioSchema>;
 export type RenderJob = z.infer<typeof jobSchema>;
 export const EMPTY_PROJECT: Project = {
+  videoTemplate: VideoTemplate.Classic,
   name: '我的房源',
   location: '',
   area: '',

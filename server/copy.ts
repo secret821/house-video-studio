@@ -2,6 +2,7 @@
 import { workspaceDirectory } from './workspace';
 import { acquireMediaSlot } from './media-queue';
 import { Router } from 'express';
+import multer from 'multer';
 import { createHash, randomUUID } from 'node:crypto';
 import {
   existsSync,
@@ -32,6 +33,11 @@ import { ROOT, HttpError, resolveAsset, runFile } from './media';
 import { probeVideo } from './video-edit';
 import { requestCopyJson } from './copy-provider';
 import { extractPropertyWithModel } from './property-extraction';
+import {
+  getPropertyOcrCapability,
+  recognizePropertyScreenshot,
+} from './property-ocr';
+import { reserveStorage, MIB } from './storage-capacity';
 import {
   HouseMediaKind,
   getHouseMaterials,
@@ -332,6 +338,45 @@ export function generateCopy(
 }
 
 export const copyRouter = Router();
+const screenshotUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * MIB, files: 1 },
+});
+copyRouter.get('/get-ocr-capability', (_req, res) =>
+  res.json(getPropertyOcrCapability()),
+);
+copyRouter.post('/recognize-property-screenshot', (req, res, next) => {
+  const releaseStorage = reserveStorage(32 * MIB);
+  const controller = new AbortController();
+  const disconnected = () => {
+    if (!res.writableFinished)
+      controller.abort(new HttpError(499, '截图识别连接已断开。'));
+  };
+  res.once('close', disconnected);
+  return acquireMediaSlot(controller.signal)
+    .then((release) =>
+      new Promise<void>((resolveUpload, reject) => {
+        screenshotUpload.single('file')(req, res, (error: unknown) => {
+          if (error) reject(error);
+          else resolveUpload();
+        });
+      })
+        .then(() => {
+          if (controller.signal.aborted || !req.file)
+            throw new HttpError(400, '请选择房源详情截图。');
+          return recognizePropertyScreenshot(req.file, controller.signal);
+        })
+        .then((result) => res.json(result))
+        .finally(release),
+    )
+    .catch((error: unknown) => {
+      if (!res.destroyed) next(error);
+    })
+    .finally(() => {
+      res.off('close', disconnected);
+      releaseStorage();
+    });
+});
 copyRouter.get('/get-capability', (_req, res) => {
   const ready = readCloudConfig().ready;
   res.json({

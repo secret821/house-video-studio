@@ -15,12 +15,14 @@ import {
 import {
   Motion,
   OpeningSource,
+  VideoTemplate,
   type Project,
   type Scene,
 } from '../services/definition/project';
 
 import { getCaptionLines, getTimeline } from './timeline';
 import { VideoWatermark } from './video-watermark';
+import { EDITORIAL_TEXT, EDITORIAL_TITLE } from './editorial-template';
 
 /** Only the moving image subscribes to every frame; crop protects the image edges. */
 function MotionPhoto({ scene, frames }: { scene: Scene; frames: number }) {
@@ -96,21 +98,25 @@ function PhotoScene({
   scene,
   frames,
   captions,
+  template,
 }: {
   scene: Scene;
   frames: number;
   captions: boolean;
+  template: VideoTemplate;
 }) {
   const { fps, width, height } = useVideoConfig();
   return (
     <AbsoluteFill style={{ overflow: 'hidden' }}>
       <MotionPhoto scene={scene} frames={frames} />
-      <AbsoluteFill
-        style={{
-          background:
-            'linear-gradient(180deg,rgba(0,0,0,.38),transparent 38%,transparent 48%,rgba(0,0,0,.68))',
-        }}
-      />
+      {template === VideoTemplate.Classic && (
+        <AbsoluteFill
+          style={{
+            background:
+              'linear-gradient(180deg,rgba(0,0,0,.38),transparent 38%,transparent 48%,rgba(0,0,0,.68))',
+          }}
+        />
+      )}
       <div
         style={{
           position: 'absolute',
@@ -121,6 +127,7 @@ function PhotoScene({
           fontWeight: 600,
           color: 'white',
           letterSpacing: 2,
+          ...(template === VideoTemplate.Editorial && EDITORIAL_TITLE),
         }}
       >
         {scene.title}
@@ -147,6 +154,8 @@ function PhotoTour({ project }: { project: Project }) {
       style={{
         backgroundColor: '#101b1a',
         fontFamily: 'PingFang SC, Microsoft YaHei, sans-serif',
+        ...(project.videoTemplate === VideoTemplate.Editorial &&
+          EDITORIAL_TEXT),
       }}
     >
       <TransitionSeries>
@@ -160,6 +169,7 @@ function PhotoTour({ project }: { project: Project }) {
                 scene={scene}
                 frames={frames}
                 captions={project.showCaptions}
+                template={project.videoTemplate}
               />
             </TransitionSeries.Sequence>
             {index < timeline.scenes.length - 1 && timeline.overlap > 0 && (
@@ -181,6 +191,8 @@ function PhotoTour({ project }: { project: Project }) {
           left: '8%',
           right: '8%',
           color: 'white',
+          ...(project.videoTemplate === VideoTemplate.Editorial &&
+            EDITORIAL_TEXT),
         }}
       >
         <div
@@ -194,6 +206,8 @@ function PhotoTour({ project }: { project: Project }) {
         </div>
         <div
           style={{
+            ...(project.videoTemplate === VideoTemplate.Editorial &&
+              EDITORIAL_TITLE),
             fontSize: Math.min(width, height) * 0.058,
             fontWeight: 600,
             lineHeight: 1.4,

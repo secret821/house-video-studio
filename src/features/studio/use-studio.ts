@@ -1,12 +1,14 @@
 /** Owns editor state, sequential uploads, speech generation and real job polling. */
 import { VIDEO_UPLOAD_MAX_BYTES } from '../../services/definition/video-upload';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createMediaId } from '../../services/definition/media-id';
 
 import {
   EMPTY_PROJECT,
   JobStatus,
   Motion,
+  VideoTemplate,
+  VIDEO_TEMPLATE_MAP,
   type Project,
   type RenderJob,
   type Scene,
@@ -16,6 +18,8 @@ import api from './api';
 import { musicApi } from './music-api';
 import type { MusicChoice } from '@/services/definition/music-library';
 import { useVideoUpload } from './use-video-upload';
+import { useCurrentDraft } from './use-current-draft';
+import { useBackgroundJob } from './use-background-job';
 
 enum Work {
   Loading = '正在读取本机草稿…',
@@ -31,6 +35,12 @@ enum Work {
 export function useStudio() {
   const upload = useVideoUpload();
   const [project, setProject] = useState<Project>(EMPTY_PROJECT);
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const currentDraft = useCurrentDraft({
+    project,
+    loaded: draftLoaded,
+    save: api.saveDraft,
+  });
   const [selectedId, setSelectedId] = useState('');
   const [work, setWork] = useState<Work | null>(Work.Loading);
   const [notice, setNotice] = useState({ text: '', error: false });
@@ -47,27 +57,53 @@ export function useStudio() {
   const busy = work !== null || rendering || upload.busy;
 
   /** Display failures rather than leaving rejected background work invisible. */
-  function reportError(error: unknown) {
+  const reportError = useCallback((error: unknown) => {
     setNotice({
       text: error instanceof Error ? error.message : '操作失败，请重试。',
       error: true,
     });
-  }
+  }, []);
 
   useEffect(() => {
     let active = true;
-    Promise.all([api.getDraft(), api.getCapabilities(), api.getLatestRender()])
-      .then(([{ project: draft, mediaExpired }, capabilities, latest]) => {
-        if (!active) return;
-        if (draft) setProject(draft);
-        if (mediaExpired)
-          setNotice({
-            text: '草稿文案已恢复，但临时素材已过期或服务已重启，请重新上传素材后生成。',
-            error: true,
-          });
-        setSpeechCapability(capabilities);
-        setJob(latest?.sessionId === draft?.sessionId ? latest : null);
-      })
+    Promise.all([
+      api.getDraft().then((draft) => {
+        if (active) {
+          if (draft.project) setProject(draft.project);
+          setDraftLoaded(true);
+        }
+        return draft;
+      }),
+      api.getCapabilities(),
+      api.getLatestRender().then((latest) => {
+        if (active && latest?.status === JobStatus.Rendering) setJob(latest);
+        return latest;
+      }),
+    ])
+      .then(
+        ([
+          { project: draft, mediaExpired, mediaError },
+          capabilities,
+          latest,
+        ]) => {
+          if (!active) return;
+          if (draft) setProject(draft);
+          if (mediaExpired || mediaError)
+            setNotice({
+              text:
+                mediaError ??
+                '旧草稿文字已恢复，部分素材没有本地备份且已过期，请重新上传这些素材。',
+              error: true,
+            });
+          setSpeechCapability(capabilities);
+          setJob(
+            latest?.status === JobStatus.Rendering ||
+              latest?.sessionId === draft?.sessionId
+              ? latest
+              : null,
+          );
+        },
+      )
       .catch((error: unknown) => {
         if (active)
           setNotice({
@@ -81,38 +117,13 @@ export function useStudio() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [reportError]);
 
-  const jobId = job?.id;
-  useEffect(() => {
-    if (!rendering || !jobId) return;
-    let active = true;
-    let timer: ReturnType<typeof setTimeout>;
-    /** Poll once per second after completion of the previous request, never in parallel. */
-    function poll() {
-      api
-        .getRender(jobId!)
-        .then((next) => {
-          if (!active) return;
-          setJob(next);
-          if (next.status === JobStatus.Rendering)
-            timer = setTimeout(poll, 1000);
-        })
-        .catch((error: unknown) => {
-          if (!active) return;
-          setNotice({
-            text: `读取导出进度失败：${error instanceof Error ? error.message : '网络异常'}。正在重试。`,
-            error: true,
-          });
-          timer = setTimeout(poll, 3000);
-        });
-    }
-    poll();
-    return () => {
-      active = false;
-      clearTimeout(timer);
-    };
-  }, [jobId, rendering]);
+  useBackgroundJob(job, {
+    read: api.getRender,
+    onChange: setJob,
+    onError: reportError,
+  });
 
   /** Attach a local video only after normalization succeeds; failed replacements retain the prior opening. */
   function addOpeningVideo(file: File | undefined) {
@@ -218,10 +229,29 @@ export function useStudio() {
     setNotice({ text: '', error: false });
     setWork(Work.Starting);
     api
-      .saveDraft(project)
-      .then(() => api.createRender(project))
+      .createRender(project)
       .then(setJob)
-      .catch(reportError)
+      .catch((failure: unknown) =>
+        api
+          .getLatestRender()
+          .then((latest) => {
+            if (
+              latest &&
+              latest.id !== job?.id &&
+              latest.status !== JobStatus.Failed &&
+              latest.sessionId === project.sessionId &&
+              (latest.videoTemplate ?? VideoTemplate.Classic) ===
+                project.videoTemplate
+            ) {
+              setJob(latest);
+              setNotice({
+                text: '已找回服务端接收的后台任务，可以切换应用，回来后继续查看进度。',
+                error: false,
+              });
+            } else reportError(failure);
+          })
+          .catch(() => reportError(failure)),
+      )
       .finally(() => setWork(null));
   }
 
@@ -253,8 +283,18 @@ export function useStudio() {
   }
 
   return {
+    selectTemplate: (videoTemplate: VideoTemplate) => {
+      if (busy || videoTemplate === project.videoTemplate) return;
+      const next = { ...project, videoTemplate };
+      setProject(next);
+      setNotice({
+        text: `已切换为${VIDEO_TEMPLATE_MAP[videoTemplate].name}，照片和房源信息保持不变，点击“重新生成成片”制作另一版。`,
+        error: false,
+      });
+    },
     upload,
     project,
+    draftStatus: currentDraft.status,
     selected,
     busy,
     work,
@@ -272,10 +312,11 @@ export function useStudio() {
         .saveDraft(next)
         .then(() => {
           setProject(next);
+          setDraftLoaded(true);
           setSelectedId('');
           setJob(null);
           setNotice({
-            text: '已新建空房源视频，草稿已保存到当前浏览器。原始素材与历史成片保留。',
+            text: '已新建空房源视频，当前草稿已替换，旧草稿已替换，不再引用的素材将在空闲后清理。',
             error: false,
           });
         })
@@ -329,11 +370,11 @@ export function useStudio() {
     },
     saveDraft: () => {
       setWork(Work.Saving);
-      api
-        .saveDraft(project)
+      currentDraft
+        .save()
         .then(() =>
           setNotice({
-            text: '草稿已保存到本机，下次打开自动载入。',
+            text: '草稿已保存到当前账号，下次打开自动载入。',
             error: false,
           }),
         )

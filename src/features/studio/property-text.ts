@@ -2,7 +2,7 @@
 import { z } from 'zod';
 
 import {
-  videoEditSchema,
+  videoEditTextFields,
   type VideoEditProject,
 } from '../../services/definition/video-edit';
 
@@ -20,10 +20,10 @@ export type PropertyPatch = Partial<
 >;
 const propertyPatchSchema = z
   .object({
-    name: videoEditSchema.shape.name,
-    facts: videoEditSchema.shape.facts,
-    price: videoEditSchema.shape.price,
-    extra: videoEditSchema.shape.extra,
+    name: videoEditTextFields.name,
+    facts: videoEditTextFields.facts,
+    price: videoEditTextFields.price,
+    extra: videoEditTextFields.extra,
   })
   .partial();
 const CHINESE_DIGITS: Record<string, number> = {
@@ -77,13 +77,19 @@ function matchValues(
 function extractNames(text: string): Array<string> {
   const names = matchValues(text, {
     pattern:
-      /(?:小区(?:名称)?|楼盘(?:名称)?|房源名称|项目名称)\s*[:：]\s*([^，,。；;\n|｜]{2,})/g,
-    format: (match) => match[1].trim().replace(/小区$/, ''),
+      /(?:小区(?:名称)?|楼盘(?:名称)?|房源名称|项目名称)[ \t]*(?:[:：]|[ \t]+)[ \t]*([^，,。；;\n|｜]{2,})/g,
+    ignorePrefix: /必看$/,
+    format: (match) =>
+      match[1]
+        .split(/[（(>＞]/)[0]
+        .trim()
+        .replace(/小区$/, ''),
   });
   text.split('\n').forEach((line) => {
     if (line.trim().startsWith('#')) return;
     const heading = line
       .trim()
+      .replace(/^\d{1,2}\s*[、.．]\s*/, '')
       .replace(/^[^\p{Script=Han}\p{L}\p{N}]+/u, '')
       .replace(/[^\p{Script=Han}\p{L}\p{N}·\s]+$/u, '');
     const match =
@@ -94,15 +100,29 @@ function extractNames(text: string): Array<string> {
       names.push(match[1].trim());
   });
   return names.filter(
-    (name) => name.length <= 32 && !/1[3-9]\d{9}|电话|手机/.test(name),
+    (name) =>
+      name.length <= 32 &&
+      !/^(?:推荐|动态|评价|概览|图片|地图|咨询)$/.test(name) &&
+      !/1[3-9]\d{9}|电话|手机/.test(name),
   );
 }
 
 /** Deduplicate repeated versions and surface disagreements instead of selecting the first price, size or floor. */
 export function extractPropertyText(raw: string): Array<PropertyCandidate> {
-  const text = raw
+  let text = raw
     .slice(0, 12000)
     .replace(/[０-９]/g, (digit) => String(digit.charCodeAt(0) - 0xff10));
+  // OCR of a listing screenshot may put three large values above their labels.
+  if (/售价\s+房型\s+建筑面积/.test(text)) {
+    const floorPlanEnd = /(?:^|\n)户型\s+图片\s*\n/.exec(text);
+    if (floorPlanEnd)
+      text = text.slice(floorPlanEnd.index + floorPlanEnd[0].length);
+    text = text.replace(
+      /(^|\n)(\d+(?:\.\d+)?\s*[+＋]?\s*[万亿元])\s+([1-9][房室][1-9]厅(?:[1-9]卫)?)\s+(\d+(?:\.\d+)?)(?:㎡|m²|m2)?\s*\n售价\s+房型\s+建筑面积(?=\n|$)/g,
+      (_match, start: string, price: string, layout: string, area: string) =>
+        `${start}售价：${price}\n房型：${layout}\n建筑面积：${area}㎡`,
+    );
+  }
   const values: Record<PropertyKey, Array<string>> = {
     name: extractNames(text),
     location: matchValues(text, {
@@ -119,18 +139,36 @@ export function extractPropertyText(raw: string): Array<PropertyCandidate> {
         /(?:总高|共有|共|整栋|全栋)\s*([1-9]\d?|[一二两三四五六七八九]?十[一二三四五六七八九]?|[一二两三四五六七八九])\s*层|(?<![\d.一二两三四五六七八九十])([1-9]\d?|[一二两三四五六七八九]?十[一二三四五六七八九]?|[一二两三四五六七八九])\s*层\s*(?:格局|结构)/g,
       format: (match) => `共${countNumber(match[1] ?? match[2])}层`,
     }),
-    floor: matchValues(text, {
-      pattern:
-        /(?<![\d.一二两三四五六七八九十])([1-9]\d?|[一二两三四五六七八九]?十[一二三四五六七八九]?|[一二两三四五六七八九])\s*(?:楼|层)(?!\s*(?:格局|结构))/g,
-      ignorePrefix: /(?:总高|共有|共|整栋|全栋)\s*$/,
-      format: (match) => `${countNumber(match[1])}楼`,
-    }),
-    area: matchValues(text, {
-      pattern:
-        /(?<![\d.])(?:(产证(?:面积)?|产权面积)\s*[:：为是]?\s*)?((?:大约|约)?\s*\d+(?:\.\d+)?)\s*(?:个\s*)?(?:㎡|m²|m2|平方米|平米|平方|平)(?![A-Za-z\d])(?:\s*(左右|上下))?/giu,
-      format: (match) =>
-        `${match[1] ? '产证' : ''}${match[2].replace(/\s/g, '')}㎡${match[3] ?? ''}`,
-    }),
+    floor: [
+      ...matchValues(text, {
+        pattern:
+          /(?<![\d.一二两三四五六七八九十])([1-9]\d?|[一二两三四五六七八九]?十[一二三四五六七八九]?|[一二两三四五六七八九])\s*(?:楼|层)(?!\s*(?:格局|结构))/g,
+        ignorePrefix: /(?:总高|共有|共|整栋|全栋)\s*$/,
+        format: (match) => `${countNumber(match[1])}楼`,
+      }),
+      ...matchValues(text, {
+        pattern: /顶楼|顶层/g,
+        format: () => '顶楼',
+      }),
+      ...matchValues(text, {
+        pattern: /高楼层|中楼层|低楼层/g,
+        format: (match) => match[0],
+      }),
+    ],
+    area: [
+      ...matchValues(text, {
+        pattern:
+          /(?<![\d.])(?:(产证(?:面积)?|产权面积)\s*[:：为是]?\s*)?((?:大约|约)?\s*\d+(?:\.\d+)?)\s*(?:个\s*)?(?:㎡|m²|m2|平方米|平米|平方|平)(?![A-Za-z\d])(?:\s*(左右|上下))?/giu,
+        format: (match) =>
+          `${match[1] ? '产证' : ''}${match[2].replace(/\s/g, '')}㎡${match[3] ?? ''}`,
+      }),
+      ...matchValues(text, {
+        // Screenshot OCR often reads the square-metre glyph as plain "m"; the label is required.
+        pattern:
+          /(?:建筑面积|套内面积|面积)[ \t]*[:：]?[ \t]*((?:大约|约)?\s*\d+(?:\.\d+)?)[ \t]*m(?![A-Za-z\d²])/giu,
+        format: (match) => `${match[1].replace(/\s/g, '')}㎡`,
+      }),
+    ],
     layout: matchValues(text, {
       pattern:
         /(?<![\d一二两三四五六七八九十])([一二两三四五六七八九]|[1-9])(?:房|室)(?:[一二两三四五六七八九1-9]厅)?(?:[一二两三四五六七八九1-9]卫)?/g,
@@ -146,18 +184,42 @@ export function extractPropertyText(raw: string): Array<PropertyCandidate> {
     }),
     price: matchValues(text, {
       pattern:
-        /(?:总价|售价|报价|价格|仅售)\s*[:：为是仅只需]*\s*((?:大约|约)?\s*\d+(?:\.\d+)?)\s*(万元?|亿元?|元)(?:\s*(左右|上下))?/g,
+        /(?:总价|售价|报价|价格|仅售)\s*[:：为是仅只需]*\s*((?:大约|约)?\s*\d+(?:\.\d+)?)\s*(\+|＋)?\s*(万元?|亿元?|元)(?:\s*(左右|上下))?/g,
       format: (match) =>
-        `${match[1].replace(/\s/g, '')}${match[2].replace('万元', '万').replace('亿元', '亿')}${match[3] ?? ''}`,
+        `${match[1].replace(/\s/g, '')}${match[2] ? '+' : ''}${match[3].replace('万元', '万').replace('亿元', '亿')}${match[4] ?? ''}`,
     }),
-    extra: matchValues(text, {
-      pattern:
-        /(?:附带|另带|额外带|带|赠送|赠|送)\s*(?:一个|一间|个|间)?\s*(柴草间|储藏室|储物间|车库|车位|地下室)|挑空(?:大)?客厅/g,
-      format: (match) => (match[1] ? `另带${match[1]}` : '挑空客厅'),
-    }),
+    extra: [
+      ...matchValues(text, {
+        pattern:
+          /(?:附带|另带|额外带|带|赠送|赠|送)\s*(?:一个|一间|个|间)?\s*(柴草间|储藏室|储物间|车库|车位|地下室|露台)|挑空(?:大)?客厅/g,
+        format: (match) =>
+          match[1]
+            ? match[1] === '露台'
+              ? '带露台'
+              : `另带${match[1]}`
+            : '挑空客厅',
+      }),
+      ...matchValues(text, {
+        pattern:
+          /南北通透|南朝向|北朝向|东朝向|西朝向|无电梯|有电梯|满五唯一|满二唯一|满五|满二|不限购/g,
+        format: (match) => match[0],
+      }),
+    ],
   };
   return PROPERTY_FIELDS.map(({ key }) => {
-    const candidates = [...new Set(values[key])];
+    const distinct = [...new Set(values[key])];
+    const candidates =
+      key === 'layout'
+        ? distinct.filter(
+            (value) =>
+              !distinct.some(
+                (other) =>
+                  other.length > value.length && other.startsWith(value),
+              ),
+          )
+        : key === 'extra' && distinct.join(' / ').length <= 40
+          ? [distinct.join(' / ')].filter(Boolean)
+          : distinct;
     return {
       key,
       candidates,

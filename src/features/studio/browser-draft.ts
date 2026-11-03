@@ -1,46 +1,25 @@
-/** Only project JSON lives in browser storage. Video/image bytes and credentials never enter these drafts. */
+/** Read legacy JSON only when no server draft exists; never download or back up media in the browser. */
 import { z } from 'zod';
-import { getDraftSession } from './auth-api';
 
-export enum BrowserDraftKind {
-  Photo = 'photo',
-  Video = 'video',
-}
-/** Account namespacing and a fresh cookie check protect same-browser account switches. */
-export function readBrowserDraft<T>(
-  kind: BrowserDraftKind,
+import type { DraftKind } from '@/services/definition/project';
+
+export function readLegacyBrowserDraft<T>(
+  kind: DraftKind,
   schema: z.ZodType<T>,
+  workspaceId: string,
 ) {
-  return getDraftSession().then((session) => {
+  try {
     const value = localStorage.getItem(
-      `house-studio:draft:${session.workspaceId ?? 'local'}:${kind}`,
+      `house-studio:draft:${workspaceId}:${kind}`,
     );
     if (!value) return { project: null, mediaExpired: false };
-    const stored = z
-      .object({ project: schema, mediaSessionId: z.string().nullable() })
-      .parse(JSON.parse(value));
+    const stored = z.object({ project: schema }).parse(JSON.parse(value));
+    return { project: stored.project, mediaExpired: false };
+  } catch {
     return {
-      project: stored.project,
-      mediaExpired:
-        session.temporaryMedia &&
-        stored.mediaSessionId !== session.mediaSessionId,
+      project: null,
+      mediaExpired: false,
+      mediaError: '无法读取旧浏览器草稿。服务器草稿可正常使用；请保留原文件。',
     };
-  });
-}
-/** Storage denial/quota failures reject, so a draft is never reported saved when the browser refused it. */
-export function saveBrowserDraft<T>(
-  kind: BrowserDraftKind,
-  schema: z.ZodType<T>,
-  project: T,
-) {
-  return getDraftSession().then((session) => {
-    localStorage.setItem(
-      `house-studio:draft:${session.workspaceId ?? 'local'}:${kind}`,
-      JSON.stringify({
-        project: schema.parse(project),
-        mediaSessionId: session.mediaSessionId,
-      }),
-    );
-    return { saved: true };
-  });
+  }
 }

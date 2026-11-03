@@ -1,8 +1,16 @@
 /** One local paste-and-review step imports property facts without changing recorded speech or shot subtitles. */
-import { Button, Checkbox, Input, Collapse } from 'antd';
-import { useEffect, useState } from 'react';
+import {
+  Button,
+  Checkbox,
+  Input,
+  Collapse,
+  ButtonAppearance,
+  cn,
+} from './common';
+import { useEffect, useRef, useState } from 'react';
 
 import api from './api';
+import { FileUpload } from './file-upload';
 
 import {
   PROPERTY_FIELDS,
@@ -16,23 +24,72 @@ import {
 export function PropertyTextImport({
   disabled: parentDisabled,
   onApply,
+  draft,
 }: {
   disabled: boolean;
   onApply: (patch: PropertyPatch) => void;
+  draft: {
+    source: string;
+    fields: Array<PropertyCandidate> | null;
+    onChange: (patch: {
+      sourceText?: string;
+      propertyFields?: Array<PropertyCandidate> | null;
+    }) => void;
+  };
 }) {
-  const [source, setSource] = useState('');
-  const [fields, setFields] = useState<Array<PropertyCandidate> | null>(null);
+  const { source, fields, onChange } = draft;
+  /** Unadopted extraction edits are part of the same current draft as their source text. */
+  function setFields(
+    value:
+      | Array<PropertyCandidate>
+      | null
+      | ((
+          current: Array<PropertyCandidate> | null,
+        ) => Array<PropertyCandidate> | null),
+  ) {
+    onChange({
+      propertyFields: typeof value === 'function' ? value(fields) : value,
+    });
+  }
   const [notice, setNotice] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const [confirmed, setConfirmed] = useState(false);
+  const requestVersion = useRef(0);
+  const [ocrCapability, setOcrCapability] = useState({
+    ready: false,
+    message: '正在检查本地截图识别…',
+  });
   const [capability, setCapability] = useState({
     ready: false,
     message: '正在检查百炼配置…',
   });
   const disabled = parentDisabled || loading;
   useEffect(() => {
+    requestVersion.current += 1;
+    setLoading(false);
+  }, [source]);
+  useEffect(
+    () => () => {
+      requestVersion.current += 1;
+    },
+    [],
+  );
+  useEffect(() => {
     let active = true;
+    api
+      .getPropertyOcrCapability()
+      .then((result) => {
+        if (active) setOcrCapability(result);
+      })
+      .catch((error: unknown) => {
+        if (active)
+          setOcrCapability({
+            ready: false,
+            message:
+              error instanceof Error ? error.message : '截图识别配置读取失败。',
+          });
+      });
     api
       .getCopyCapability()
       .then((result) => {
@@ -50,6 +107,37 @@ export function PropertyTextImport({
       active = false;
     };
   }, []);
+
+  /** OCR text enters the same editable source and review fields; a changed draft rejects late results. */
+  function recognizeScreenshot(files: Array<File>) {
+    if (disabled || !ocrCapability.ready) return;
+    const file = files[0];
+    if (file.size > 10 * 1024 * 1024) {
+      setError('截图不能超过10MiB，请分段截取详情页。');
+      return;
+    }
+    const version = ++requestVersion.current;
+    setLoading(true);
+    setError('');
+    setNotice('');
+    api
+      .recognizePropertyScreenshot(file)
+      .then(({ text }) => {
+        if (version !== requestVersion.current) return;
+        onChange({
+          sourceText: text,
+          propertyFields: extractPropertyText(text),
+        });
+        setNotice('截图已识别并移除。请校对文字和字段，再确认填入。');
+      })
+      .catch((error: unknown) => {
+        if (version === requestVersion.current)
+          setError(error instanceof Error ? error.message : '截图识别失败。');
+      })
+      .finally(() => {
+        if (version === requestVersion.current) setLoading(false);
+      });
+  }
 
   /** The model returns editable fields and exact source quotes; no project mutation occurs here. */
   function extractWithModel() {
@@ -110,7 +198,9 @@ export function PropertyTextImport({
   return (
     <section className="space-y-4" aria-label="整段文案提取房源信息">
       <label className="block">
-        <span className="studio-label">粘贴房源资料或口播文案</span>
+        <span className="mb-2 block text-body font-medium">
+          粘贴房源资料或口播文案
+        </span>
         <Input.TextArea
           className="min-h-36 w-full resize-y px-4 py-3 text-sm"
           aria-label="房源原始文案"
@@ -119,13 +209,25 @@ export function PropertyTextImport({
           value={source}
           disabled={disabled}
           onChange={(event) => {
-            setSource(event.target.value);
+            onChange({ sourceText: event.target.value });
             setFields(null);
             setNotice('');
             setError('');
           }}
         />
       </label>
+      <div className="space-y-2">
+        <FileUpload
+          label="识别房源详情截图（本地免费）"
+          accept=".jpg,.jpeg,.png,.webp"
+          disabled={disabled || !ocrCapability.ready}
+          onFiles={recognizeScreenshot}
+        />
+        <p className="text-xs text-muted">
+          {ocrCapability.message}{' '}
+          支持贝壳详情页截图；一次一张，识别后自动移除图片，可修改文字和字段。
+        </p>
+      </div>
       <Collapse
         className="studio-upload-help"
         ghost
@@ -140,7 +242,12 @@ export function PropertyTextImport({
                 <p>
                   一行一个字段，未知项删除，只保留一个确定值。以下仅为格式示例：
                 </p>
-                <pre className="studio-template">{`小区：幸福家园
+                <pre
+                  className={cn(
+                    'whitespace-pre-wrap rounded bg-page p-4',
+                    'font-sans leading-6 text-ink',
+                  )}
+                >{`小区：幸福家园
 位置：安福县平都镇
 房屋类型：住宅
 建筑层数：共18层
@@ -157,7 +264,7 @@ export function PropertyTextImport({
       />
       {loading && (
         <p role="status" className="text-xs text-muted">
-          正在理解原文并提取事实…
+          正在识别或理解房源资料…
         </p>
       )}
       {error && (
@@ -166,7 +273,6 @@ export function PropertyTextImport({
         </p>
       )}
       <Button
-        className="island-action"
         disabled={disabled || !source.trim()}
         onClick={() => {
           setFields(extractPropertyText(source));
@@ -208,8 +314,7 @@ export function PropertyTextImport({
                     需在百炼控制台核实；本程序不能读取余额或设置开关，未开启可能计费。仅点击语义提取才调用。
                   </p>
                   <Button
-                    className="island-action"
-                    type="primary"
+                    appearance={ButtonAppearance.Solid}
                     loading={loading}
                     disabled={
                       disabled ||
@@ -233,7 +338,7 @@ export function PropertyTextImport({
           aria-label="待确认房源信息"
         >
           <p className="text-xs text-muted">
-            未识别项留空，不猜小区名称或房厅数量。位置、类型、建筑层数、所在楼层、面积、户型和装修会合并成房源说明；未识别部分不会沿用旧说明。手机号和营销评价不写入成片。
+            未识别项留空，不猜小区名称或房厅数量。位置、类型、楼层、面积、户型和装修会合并成房源说明；露台、朝向及税费等明确说法进入附加信息，采纳前请核实。手机号和营销评价不写入成片。
           </p>
           {unresolved && (
             <p role="alert" className="text-sm text-danger">
@@ -251,7 +356,7 @@ export function PropertyTextImport({
               return (
                 <div key={config.key} className="min-w-0">
                   <label className="block">
-                    <span className="studio-label">
+                    <span className="mb-2 block text-body font-medium">
                       提取结果 · {config.label}
                     </span>
                     <Input
@@ -280,7 +385,6 @@ export function PropertyTextImport({
                       {field.candidates.map((candidate) => (
                         <Button
                           key={candidate}
-                          className="island-action"
                           disabled={disabled}
                           onClick={() => editField(config.key, candidate)}
                         >
@@ -299,8 +403,7 @@ export function PropertyTextImport({
             </p>
           )}
           <Button
-            className="island-action"
-            type="primary"
+            appearance={ButtonAppearance.Solid}
             disabled={disabled || !hasValues || Boolean(unresolved)}
             onClick={apply}
           >

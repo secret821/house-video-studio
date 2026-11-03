@@ -5,11 +5,12 @@ import { imagePathSchema, projectSchema } from './project';
 import {
   importedVideoSchema,
   houseMaterialSchema,
-  videoEditSchema,
+  videoEditTextFields,
   videoShotSchema,
 } from './video-edit';
 
-export const COPY_MODEL = 'qwen3.7-flash';
+import { COPY_MODEL, copyResultSchema } from './copy-result';
+export { COPY_MODEL, copyItemSchema, copyResultSchema } from './copy-result';
 /** These labels need supplied property facts; seeing a surface or parked car is insufficient. */
 export const COPY_RESTRICTED_CLAIMS = [
   '精装修',
@@ -55,10 +56,10 @@ export const copyInputSchema = z.discriminatedUnion('kind', [
     kind: z.literal(CopyKind.Video),
     brief: z.string().max(2000).optional(),
     facts: z.object({
-      name: videoEditSchema.shape.name,
-      facts: videoEditSchema.shape.facts,
-      price: videoEditSchema.shape.price,
-      extra: videoEditSchema.shape.extra,
+      name: videoEditTextFields.name,
+      facts: videoEditTextFields.facts,
+      price: videoEditTextFields.price,
+      extra: videoEditTextFields.extra,
     }),
     house: importedVideoSchema.nullable(),
     materials: z.array(houseMaterialSchema).max(12).default([]),
@@ -78,19 +79,6 @@ export const copyInputSchema = z.discriminatedUnion('kind', [
 export const copySubmissionSchema = z.object({
   input: copyInputSchema,
   freeQuotaConfirmed: z.literal(true),
-});
-export const copyItemSchema = z.object({
-  id: z.string().min(1).max(80),
-  title: z.string().min(1).max(24),
-  narration: z.string().min(1).max(160),
-  caption: z.string().min(1).max(100),
-  evidence: z.string().min(1).max(240),
-});
-export const copyResultSchema = z.object({
-  model: z.literal(COPY_MODEL),
-  cached: z.boolean(),
-  items: z.array(copyItemSchema).min(1).max(12),
-  warnings: z.array(z.string().max(240)).max(12).optional(),
 });
 export const copyCapabilitySchema = z.object({
   ready: z.boolean(),

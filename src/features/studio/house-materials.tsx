@@ -1,10 +1,11 @@
-import { Collapse, ConfigProvider } from 'antd';
+import { Button, Collapse, ConfigProvider, cn } from './common';
 /** The default intake pairs one recorded introduction with an ordered collection of house clips and photos. */
 
 import { VideoRole } from '@/services/definition/video-edit';
 
 import { FileUpload } from './file-upload';
 import { MaterialOrderList } from './material-order-list';
+import { UploadedVideoPreview } from './uploaded-video-preview';
 import type { useVideoEdit } from './use-video-edit';
 
 /** Inputs remain visible for an empty project; adding more files never replaces previous house media. */
@@ -18,16 +19,17 @@ export function HouseMaterials({
     <ConfigProvider componentDisabled={busy}>
       <fieldset
         disabled={busy}
-        className="studio-material-grid"
+        className={cn(
+          'grid grid-cols-2 gap-6 max-[1150px]:grid-cols-1',
+          'max-[800px]:grid-cols-2 max-[800px]:gap-4 max-[540px]:grid-cols-1',
+        )}
         aria-label="口播开场与房屋素材"
       >
         <section
           className="studio-material-card min-w-0"
           aria-label="口播开场上传"
         >
-          <h2 className="text-xl leading-[30px] font-semibold text-ink">
-            人物口播开场
-          </h2>
+          <h2 className="text-heading-4 font-medium text-ink">人物口播开场</h2>
           <div className="mt-4">
             <FileUpload
               label={project.opening ? '更换口播视频' : '上传口播视频'}
@@ -39,15 +41,26 @@ export function HouseMaterials({
             />
           </div>
           {project.opening && (
-            <div className="mt-4 flex min-w-0 items-center gap-3">
-              <img
-                className="h-24 w-16 shrink-0 rounded-lg object-cover"
-                src={project.opening.poster}
-                alt="口播开场缩略图"
-              />
-              <p className="min-w-0 text-sm break-words text-body">
-                {project.opening.name} · {project.opening.duration.toFixed(1)}秒
-              </p>
+            <div className="mt-4 min-w-0">
+              <div className="flex min-w-0 items-center gap-3">
+                <UploadedVideoPreview
+                  key={project.opening.src}
+                  video={project.opening}
+                  label="口播开场"
+                  disabled={busy}
+                />
+                <p className="min-w-0 break-words text-caption text-content">
+                  {project.opening.name} · {project.opening.duration.toFixed(1)}
+                  秒
+                </p>
+              </div>
+              <Button
+                className="mt-3"
+                disabled={busy}
+                onClick={editor.removeOpening}
+              >
+                移除口播视频
+              </Button>
             </div>
           )}
           <Collapse
@@ -72,9 +85,7 @@ export function HouseMaterials({
           className="studio-material-card min-w-0"
           aria-label="房屋视频与照片上传"
         >
-          <h2 className="text-xl leading-[30px] font-semibold text-ink">
-            房屋实拍素材
-          </h2>
+          <h2 className="text-heading-4 font-medium text-ink">房屋实拍素材</h2>
           <div className="mt-4">
             <FileUpload
               label="添加房屋视频 / 照片"

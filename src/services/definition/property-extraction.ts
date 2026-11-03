@@ -1,7 +1,7 @@
 /** Property extraction is a reviewable suggestion contract shared by the local parser and Bailian boundary. */
 import { z } from 'zod';
 
-import { COPY_MODEL } from './copy';
+import { COPY_MODEL } from './copy-result';
 
 export const PROPERTY_FIELDS = [
   { key: 'name', label: '小区 / 名称', max: 32 },
@@ -45,6 +45,13 @@ export const propertyExtractionResultSchema = z.object({
   model: z.literal(COPY_MODEL),
   cached: z.boolean(),
   fields: z.array(propertyCandidateSchema).length(PROPERTY_FIELDS.length),
+});
+export const propertyOcrCapabilitySchema = z.object({
+  ready: z.boolean(),
+  message: z.string(),
+});
+export const propertyOcrResultSchema = z.object({
+  text: z.string().max(12000),
 });
 export type PropertyCandidate = z.infer<typeof propertyCandidateSchema>;
 export type PropertyExtractionResult = z.infer<

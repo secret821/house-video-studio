@@ -2,7 +2,7 @@
 
 ## 两类清理
 
-业务素材继续由 `server/workspace.ts` 管理：公网启用 `STUDIO_TEMPORARY_MEDIA=1`，每分钟检查，账号2小时无实际使用后清理；排队、运行和媒体流持有保护，服务重启后旧业务临时目录清空。不要用cron按文件mtime删除 `shared/data`，也不要为了清理而重启正在工作的服务。
+当前草稿原片由 `server/workspace.ts` 保存在 `data/current/<workspace>/uploads`，新建/移除并确认无双模式引用或在用任务后才回收；该目录是业务数据，外部维护脚本不得扫描删除。临时处理/成片继续由 `server/workspace.ts` 管理：公网启用 `STUDIO_TEMPORARY_MEDIA=1`，每分钟检查，账号2小时无实际使用后清理；排队、运行和媒体流持有保护，服务重启后旧业务临时目录清空。不要用cron按文件mtime删除 `shared/data`，也不要为了清理而重启正在工作的服务。
 
 每日维护只扫描工作室根目录下 `artifacts/*`、`verification/*` 及其中真实的 `data` 子目录、本机 `data/*verification*` 中符合分段命名的独立验收目录。未标记目录只列清单；管理员确认验收完成、不再作为任务运行目录后写入 `.studio-disposable.json`，该标记及目录中全部文件的最后修改/元数据变更均超过7天才删除。`--days` 可延长至更久。含运行依赖软链接的验收环境整体保留，可单独标记其中真实的data子目录；标记后不可重新用作运行目录；出现符号链接、特殊文件或损坏标记时保留待检查。正在使用的业务data、历史uploads/exports/render-cache、模型、登录摘要、私有配置、发布包和依赖都不属于维护目标。
 

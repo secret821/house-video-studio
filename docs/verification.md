@@ -1217,3 +1217,9 @@ Remotion Chromium 实际渲染两版封面和实拍片内帧，检查换行、�
 同日按用户截图把原版人物封面的附加特点由84px缩至60px、价格下房源要点由72px缩至44px；标题、价格及半屏宽度未变。使用字段上限60字房源要点、23字附加特点与8字价格渲染封面，底部要点不再与联系文字重叠或被画布裁切；Chrome 本地真实草稿预览中的两处文字也已核对。另导出封面36帧H.264短MP4；`pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`、`pnpm build:video`、`pnpm test` 与 `git diff --check` 通过，187项测试通过。未重新导出完整用户成片，未发布公网。
 
 同日按经典实拍封面截图，把原版房源要点由82px缩至60px；主标题、总价和附加特点不变。使用当前草稿同类字段渲染实际封面静帧，房源要点与下方总价之间留有间距；模板卡的原版经典参考JPG由同一组件重渲染，Chrome 本地草稿实时预览已核对。导出封面36帧H.264短MP4；`pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`、`pnpm build:video`、`pnpm test` 与 `git diff --check` 通过，187项测试通过。未重新导出完整用户成片，未发布公网。
+
+## Git 推送与腾讯云正式部署（2026-11-12）
+
+完整工作区源码、测试与文档提交为 `c31b1dc` 并推送到 `origin/main`，不含业务 `data/`、`.runtime/`、`.env` 或凭据。提交前 `pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`、`pnpm build:video`、`pnpm test` 通过，187/187 测试通过。服务器以现役 `20261108-cover-mobile` 镜像的 Linux 公共运行时为基础，覆盖本提交的运行源码、Next 构建和双视频包，构建时验证源码指纹；候选镜像为 `house-video-studio:20261112-c31b1dc`。
+
+隔离候选在 3 CPU / 2560 MiB 下确认登录页 200、匿名编辑页 303、匿名 API 401，使用示意房源图片、合成 2 秒有声开场和内置演示配乐生成三条 MP4：照片 3.008 秒、经典实拍与杂志留白各 6.208 秒，均为 1080×1920 H.264/AAC。两套封面静帧视觉核对通过；候选无 OOM 或重启。切换前线上临时目录除内置音乐外无业务文件，近 10 分钟无新文件。备份原 Compose 与环境文件后重建正式容器；新镜像 healthy、OOM=false、重启 0，公网登录页 200、匿名编辑页 303、匿名 API 401。自动化浏览器连接线上页面两次超时，因此未声称完成正式站交互或真实手机长片资源验收；旧版镜像与回退配置保留在服务器。

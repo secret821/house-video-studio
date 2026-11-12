@@ -1,6 +1,6 @@
 # Docker 部署
 
-面向新购的 Linux x86_64 服务器，推荐4核4GiB、一次执行一个重型媒体任务。购买页的Docker CE镜像只是预装Docker；本仓库的Dockerfile才负责构建房源视频应用。2026-11-08 腾讯云新站已切换封面来源与手机预览修复版 `house-video-studio:20261108-cover-mobile`；上一版为 `20261107-cover-tune`。建表、迁移和回滚见 [MySQL 接入说明](../mysql.md)，本次验证见 [验收记录](../../docs/verification.md)。下方较早的候选与冻结镜像说明保留作历史记录。
+面向新购的 Linux x86_64 服务器，推荐4核4GiB、一次执行一个重型媒体任务。购买页的Docker CE镜像只是预装Docker；本仓库的Dockerfile才负责构建房源视频应用。2026-11-12 腾讯云新站已切换至 `house-video-studio:20261112-c31b1dc`；上一版为 `20261108-cover-mobile`。建表、迁移和回滚见 [MySQL 接入说明](../mysql.md)，本次验证见 [验收记录](../../docs/verification.md)。下方较早的候选与冻结镜像说明保留作历史记录。
 
 腾讯云新站为`http://106.54.221.18`，应用位于`/opt/house-video-studio-docker`，Compose管理单容器，宿主机Nginx代理到127.0.0.1:4340。2026-10-31已按用户要求迁移两个原账号并实际验证相同用户名/密码可登录，旧素材、成片、任务和登录记录未迁移，旧阿里云服务继续保留。迁移基线镜像`house-video-studio:20261031-migration-current`（SHA256 b1b3392e0ab60756d25e6a2e8a61b0fea41c7dff83fe55bc3f58c087856bf253）对应旧站正式watermark-subtitles版本，Next构建RlIPVLm_imjay0YYQFXuN。三份MP4、实际字幕识别/排队取消、水印抽帧、智能清理、隔离、重启登录与公网HTTP检查通过；候选峰值1298448384字节、无OOM，未据短样片承诺长片性能。浏览器自动化因来源权限被拒绝，不能声称页面交互验收完成。完整记录见[验证记录](../../docs/verification.md)。
 
@@ -17,7 +17,13 @@ sudo docker compose --env-file docker.env logs --tail 100
 sudo systemctl status nginx
 ```
 
-## 当前运行版本（2026-11-08 封面来源与手机预览）
+## 当前运行版本（2026-11-12 工作室模块与封面调整）
+
+正式镜像 `house-video-studio:20261112-c31b1dc`（ID `sha256:519d9025495b8199c01c05e0e9ce43196744398e8b961d0a0eb807317174b12f`）在 `20261108-cover-mobile` 的已验收 Linux 运行时上覆盖本次 Git 提交 `c31b1dc` 的完整运行源码、Next 产物和两套视频包。镜像构建时通过两套源码指纹校验；保留原有 MySQL、OCR、ASR、认证与媒体运行时挂载。冻结发布包 SHA256 为 `2479c0854a7a438814b0338b0d0c45640c4bfee082a051ae102bbef252e51a3a`，候选目录 `/home/ubuntu/studio-c31b1dc-20261112`。
+
+隔离候选在 3 CPU / 2560 MiB 限额下启动，登录页 200、匿名编辑页 303、匿名 API 401；照片、经典实拍、杂志留白三条短 MP4 均为 1080×1920、H.264/AAC，时长分别为 3.008、6.208、6.208 秒，两套实拍包含合成开场原声与背景音乐。封面静帧已核对，候选无 OOM 或重启。正式切换前临时目录除内置配乐外无业务文件，近 10 分钟无新文件；旧 `compose.yaml`、`docker.env` 保存在 `backups/c31b1dc-20261112`。正式容器 healthy、OOM=false、重启 0；公网登录页 200、匿名编辑页 303、匿名 API 401。浏览器自动化连接线上页面超时，未完成正式站登录交互或真实手机长片验收。回退前检查新任务及需下载的临时结果，恢复备份的 `docker.env` 和 `compose.yaml`，执行 `sudo docker compose --env-file docker.env up -d --no-build --force-recreate`；重建会按临时模式清理结果，上一镜像继续保留。
+
+## 上一运行版本（2026-11-08 封面来源与手机预览）
 
 正式镜像 `house-video-studio:20261108-cover-mobile`（ID `sha256:fe44cdd658eaa95ccd5e8c96e1565c135a1fc3362190627bf3cbbe57e65018f9`）以 `20261107-cover-tune` 为基础，仅更新 `src/video/video-edit.tsx`、`src/features/studio/photo/cover-settings.tsx`，以及对应 Next 产物和两套视频包。封面排版按当前底图来源选择人物或房屋样式，上传独立底图沿用当前模板；模板示例图仍只放大预览。Remotion 原片在 HTML 视频回退路径缓冲时暂停预览时间轴。发布包 SHA256 `c95c5c26cb2970fcfdf86f0ca4979a8471ff70d5bf1ffde7a8f0e2cb5e53dc0a`，服务器候选目录 `/home/ubuntu/studio-cover-mobile-20261108`。
 

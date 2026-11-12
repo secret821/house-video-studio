@@ -1,12 +1,12 @@
 # Docker 部署
 
-## 待切换候选（2026-11-12 新版封面透明度）
+## 当前运行版本（2026-11-12 新版封面透明度）
 
-源码提交 `70c50a0` 已推送到 `origin/main`。候选镜像 `house-video-studio:20261112-70c50a0`（ID `sha256:34f74756f786c7fa3fb71b96ff7feeb8a885573272a19ab919df281627bd28ae`）以当前正式镜像 `20261112-c31b1dc` 为基础，只覆盖本轮三份运行源码、三张新版示例素材、Next 产物及完整双视频包。冻结覆盖包 SHA256 为 `79141ffc30dcf905f66e06a7f913bb671322fed70997e02189756dec9f6dee8a`，候选目录 `/home/ubuntu/studio-70c50a0-20261112`；Docker 构建时双视频包源码指纹校验通过。
+源码提交 `70c50a0` 已推送到 `origin/main`。正式镜像 `house-video-studio:20261112-70c50a0`（ID `sha256:34f74756f786c7fa3fb71b96ff7feeb8a885573272a19ab919df281627bd28ae`）以上一正式镜像 `20261112-c31b1dc` 为基础，只覆盖本轮三份运行源码、三张新版示例素材、Next 产物及完整双视频包。冻结覆盖包 SHA256 为 `79141ffc30dcf905f66e06a7f913bb671322fed70997e02189756dec9f6dee8a`，候选目录 `/home/ubuntu/studio-70c50a0-20261112`；Docker 构建时双视频包源码指纹校验通过。
 
-隔离 Linux 候选在 3 CPU / 2560 MiB 限额下输出经典和杂志两套新版实拍 MP4，均为 1080×1920、H.264/AAC、6.21 秒，封面静帧已核对。隔离服务启动后匿名首页和编辑页返回 303，匿名会话接口返回 200，匿名示例图读取返回 401；候选无 OOM 或异常重启。正式站在 20:58 与 21:03 新生成两份临时成片，重建会按临时模式清理，须先确认用户已下载或允许清理；目前正式容器仍为 `20261112-c31b1dc`。
+隔离 Linux 候选在 3 CPU / 2560 MiB 限额下输出经典和杂志两套新版实拍 MP4，均为 1080×1920、H.264/AAC、6.21 秒，封面静帧已核对。隔离服务启动后匿名首页和编辑页返回 303，匿名会话接口返回 200，匿名示例图读取返回 401；候选无 OOM 或异常重启。正式站在 20:58 与 21:03 新生成两份临时成片，用户确认已下载并允许清理后切换。切换前无运行任务或近 3 分钟新写文件；旧 `compose.yaml` 与 `docker.env` 备份于 `backups/70c50a0-20261112`，除镜像标签外配置一致。正式容器 healthy、OOM=false、重启 0，双视频包校验通过；公网匿名首页和编辑页 303、会话接口 200、示例图读取 401。稳定原片目录仍在，临时结果按重启规则清理。浏览器自动化连接线上页面超时，未完成正式站登录交互或真实手机长片验收。回退前再次检查任务和需下载的临时结果，恢复备份的 `docker.env` 与 `compose.yaml`，执行 `sudo docker compose --env-file docker.env up -d --no-build --force-recreate`；上一镜像 `20261112-c31b1dc` 保留。
 
-面向新购的 Linux x86_64 服务器，推荐4核4GiB、一次执行一个重型媒体任务。购买页的Docker CE镜像只是预装Docker；本仓库的Dockerfile才负责构建房源视频应用。2026-11-12 腾讯云新站已切换至 `house-video-studio:20261112-c31b1dc`；上一版为 `20261108-cover-mobile`。建表、迁移和回滚见 [MySQL 接入说明](../mysql.md)，本次验证见 [验收记录](../../docs/verification.md)。下方较早的候选与冻结镜像说明保留作历史记录。
+面向新购的 Linux x86_64 服务器，推荐4核4GiB、一次执行一个重型媒体任务。购买页的Docker CE镜像只是预装Docker；本仓库的Dockerfile才负责构建房源视频应用。2026-11-12 腾讯云新站已切换至 `house-video-studio:20261112-70c50a0`；上一版为 `20261112-c31b1dc`。建表、迁移和回滚见 [MySQL 接入说明](../mysql.md)，本次验证见 [验收记录](../../docs/verification.md)。下方较早的候选与冻结镜像说明保留作历史记录。
 
 腾讯云新站为`http://106.54.221.18`，应用位于`/opt/house-video-studio-docker`，Compose管理单容器，宿主机Nginx代理到127.0.0.1:4340。2026-10-31已按用户要求迁移两个原账号并实际验证相同用户名/密码可登录，旧素材、成片、任务和登录记录未迁移，旧阿里云服务继续保留。迁移基线镜像`house-video-studio:20261031-migration-current`（SHA256 b1b3392e0ab60756d25e6a2e8a61b0fea41c7dff83fe55bc3f58c087856bf253）对应旧站正式watermark-subtitles版本，Next构建RlIPVLm_imjay0YYQFXuN。三份MP4、实际字幕识别/排队取消、水印抽帧、智能清理、隔离、重启登录与公网HTTP检查通过；候选峰值1298448384字节、无OOM，未据短样片承诺长片性能。浏览器自动化因来源权限被拒绝，不能声称页面交互验收完成。完整记录见[验证记录](../../docs/verification.md)。
 
@@ -23,7 +23,7 @@ sudo docker compose --env-file docker.env logs --tail 100
 sudo systemctl status nginx
 ```
 
-## 当前运行版本（2026-11-12 工作室模块与封面调整）
+## 上一运行版本（2026-11-12 工作室模块与封面调整）
 
 正式镜像 `house-video-studio:20261112-c31b1dc`（ID `sha256:519d9025495b8199c01c05e0e9ce43196744398e8b961d0a0eb807317174b12f`）在 `20261108-cover-mobile` 的已验收 Linux 运行时上覆盖本次 Git 提交 `c31b1dc` 的完整运行源码、Next 产物和两套视频包。镜像构建时通过两套源码指纹校验；保留原有 MySQL、OCR、ASR、认证与媒体运行时挂载。冻结发布包 SHA256 为 `2479c0854a7a438814b0338b0d0c45640c4bfee082a051ae102bbef252e51a3a`，候选目录 `/home/ubuntu/studio-c31b1dc-20261112`。
 

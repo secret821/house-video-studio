@@ -10,7 +10,7 @@ import {
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 
-import { getAsrRuntime } from '../server/subtitles';
+import { getAsrRuntime } from '../server/speech/subtitles';
 import { speechCaptionsSchema } from '../src/services/definition/subtitles';
 
 const runtime = getAsrRuntime();

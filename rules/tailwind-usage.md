@@ -9,12 +9,12 @@ alwaysApply: true
 
 # Tailwind CSS 使用规范
 
-本项目是单仓库 Next.js App Router 应用。产品界面采用 Tailwind CSS v4 和 Ant Design；Remotion 视频画布、原生媒体播放器与素材排序有独立的媒体约束。不要照搬其他项目的 monorepo 目录、组件库、token 或 `cn` 别名。
+本项目是单仓库 Next.js App Router 应用。产品界面采用 Tailwind CSS v4 和 Ant Design；Remotion 视频画布、原生媒体播放器与素材排序有独立的媒体约束。参考只读项目的 utility 组织方法，使用本项目真实 token 和目录。
 
 ## 当前入口与文件边界
 
 - `src/theme.css` 是唯一 Tailwind 入口，定义 `@layer`、`@import 'tailwindcss'`、`@theme inline`、全局基础规则和少量必须跨组件生效的样式。`src/app/layout.tsx` 负责引入。
-- `src/features/studio/common/` 是登录、实拍和照片模式共用的 Ant Design 控件适配层。页面从 `./common` 引入控件；`common/controls.css` 只保留库内部节点、触控尺寸和弹层等无法可靠通过组件根元素 utility 表达的规则，由 `StudioProvider` 引入。
+- `src/share/ui/` 是登录、实拍和照片模式共用的 Ant Design 控件适配层。页面从 `@/share/ui` 或相对路径引入控件；`src/share/ui/controls.css` 只保留库内部节点、触控尺寸和弹层等无法可靠通过组件根元素 utility 表达的规则，由 `StudioProvider` 引入。
 - 页面和局部组件的布局、间距、颜色、字号及响应式优先写在对应 TSX 的 Tailwind class。不要为单个页面再建 CSS Module、SCSS 或平行的全局样式文件。
 - `src/video/` 的画布尺寸、逐帧动画和媒体专用内联样式不受产品 UI 的 Tailwind 迁移约束；不得让界面主题改变封面或 MP4。
 - 当前项目没有 `.scss` / `.sass` 文件。若发现旧文件，先查真实引用和样式用途，再迁移到就近的 TSX、`@theme` 或必要的库覆盖；不要机械替换文件后缀。
@@ -30,16 +30,16 @@ alwaysApply: true
 | 正文与辅助色     | `text-ink`、`text-content`、`text-muted`、`text-danger`              |
 | 排版             | `text-heading-1` 至 `text-heading-4`、`text-body`、`text-caption` 等 |
 
-`text-body` 表示 14px/24px **字号**，`text-content` 表示正文**颜色**。两者可以并用。普通正文先用 `text-body`；缩小一级用 `text-caption`。确需新字号时，在 `@theme inline` 增加命名的 `--text-*` 值，并同步 `common/cn.ts` 的 `theme.text` 列表；不要在 TSX 写一次性的任意值字号。
+`text-body` 表示 14px/24px **字号**，`text-content` 表示正文**颜色**。两者可以并用。普通正文先用 `text-body`；缩小一级用 `text-caption`。确需新字号时，在 `@theme inline` 增加命名的 `--text-*` 值，并同步 `src/share/cn.ts` 的 `theme.text` 列表；不要在 TSX 写一次性的任意值字号。
 
 间距优先采用 4px 尺度和现有 Tailwind utility；容器按现有设计系统保持 1440px 最大宽、桌面 24px/手机 16px 边距。媒体容器的画幅、固定高度、动态头部避让或安全区可使用有实际依据的任意值。不要把普通 12px 间距写成任意值，也不要为了消除每个 class 强造 token。
 
 ## className 合并
 
-统一使用 `src/features/studio/common/cn.ts`，业务域内从 `./common` 引入；common 内部从 `./cn` 引入。它先用 `clsx` 处理条件，再用 `tailwind-merge` 消除同组冲突，同时区分本项目字号与文字颜色。`cva` 和 `VariantProps` 从同一入口导出。
+统一使用 `src/share/cn.ts`；业务页面可从 `@/share/ui` 导入。它先用 `clsx` 处理条件，再用 `tailwind-merge` 消除同组冲突，同时区分本项目字号与文字颜色。`cva` 和 `VariantProps` 从同一入口导出。
 
 ```tsx
-import { cn } from './common';
+import { cn } from '@/share/ui';
 
 <div
   className={cn(
@@ -54,7 +54,7 @@ import { cn } from './common';
 - 简短、静态的 class 直接写字符串；超过 6 个 utility 时用 `cn` 按布局、尺寸、边框/背景、文字、状态和响应式分组。
 - 条件 class 用对象写法，不用三目拼接，也不在 JSX 中反复写同一套长字符串。
 - 只有**纯视觉**变体确实被多个调用处复用时才用 `cva`。Ant Design 的 `type`、`size`、`loading` 等行为或库参数继续交给 common 适配层；不要为用上 `cva` 重写库交互。
-- `cn` 不能代替正确的 CSS 层叠。遇到 Ant Design 内部节点和弹层定位，先查库 API 与主题 token；确需覆盖才在 `common/controls.css` 写有作用域的规则。
+- `cn` 不能代替正确的 CSS 层叠。遇到 Ant Design 内部节点和弹层定位，先查库 API 与主题 token；确需覆盖才在 `src/share/ui/controls.css` 写有作用域的规则。
 
 ## 何时保留 CSS
 

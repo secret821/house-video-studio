@@ -11,7 +11,7 @@ import {
   queryRows,
   verifyDatabase,
   withTransaction,
-} from '../server/database';
+} from '../server/db/database';
 
 const identitySchema = z.object({ username: z.string().min(1).max(64) });
 interface CountRow extends RowDataPacket {

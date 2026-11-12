@@ -10,6 +10,12 @@ import {
 import { resolve } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
+import {
+  apiEnvelopeSchema,
+  toCamelKey,
+  toSnakeKey,
+  transformKeys,
+} from '../src/services/definition/api-wire';
 
 import {
   JobStatus,
@@ -26,8 +32,8 @@ import {
   completedCloudOpening,
   getCloudStatus,
   withCloudLock,
-} from '../server/cloud';
-import { DATA, resolveAsset } from '../server/media';
+} from '../server/cloud/cloud';
+import { DATA, resolveAsset } from '../server/media/media';
 
 const directory = resolve(DATA, 'house-tour-v2');
 const path = resolve(directory, 'project-bailian.json');
@@ -50,20 +56,20 @@ function request(endpoint: string, body?: unknown): Promise<unknown> {
   return fetch(`${origin}/api/${endpoint}`, {
     method: body === undefined ? 'GET' : 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body:
+      body === undefined
+        ? undefined
+        : JSON.stringify(transformKeys(body, toSnakeKey)),
     signal: AbortSignal.timeout(30000),
     redirect: 'error',
   }).then((response) =>
     response.json().then((payload: unknown) => {
-      if (!response.ok) {
-        const error = z.object({ message: z.string() }).safeParse(payload);
-        throw new Error(
-          error.success
-            ? error.data.message
-            : `本地服务返回 HTTP ${response.status}`,
-        );
-      }
-      return payload;
+      const envelope = apiEnvelopeSchema.parse(
+        transformKeys(payload, toCamelKey),
+      );
+      if (!response.ok || envelope.code !== 0)
+        throw new Error(envelope.message);
+      return envelope.data;
     }),
   );
 }

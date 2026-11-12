@@ -17,7 +17,7 @@ import {
   queryRows,
   verifyDatabase,
   withTransaction,
-} from '../server/database';
+} from '../server/db/database';
 
 const accountSchema = z.object({
   username: z.string().min(1).max(64),

@@ -6,7 +6,7 @@ import {
   TEMPORARY_MEDIA,
   getWorkspace,
   runInWorkspace,
-} from './workspace';
+} from './storage/workspace';
 import express from 'express';
 import multer from 'multer';
 import nextApp from 'next';
@@ -14,6 +14,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
+import { installApiEnvelope, normalizeApiJsonBody } from './http/response';
 import { VIDEO_UPLOAD_TIMEOUT_MS } from '../src/services/definition/video-upload';
 
 import {
@@ -25,7 +26,7 @@ import {
   sceneSchema,
 } from '../src/services/definition/project';
 
-import { DEMO_PROJECT } from './demo';
+import { DEMO_PROJECT } from './video/demo';
 import {
   ROOT,
   HttpError,
@@ -33,52 +34,56 @@ import {
   saveImage,
   resolveAsset,
   validateAssets,
-} from './media';
-import { createJob, getJob, getLatestJob } from './render';
+} from './media/media';
+import { createJob, getJob, getLatestJob } from './video/render';
 import {
   createOpeningJob,
   getOpeningCapability,
   getOpeningJob,
   getLatestOpeningJob,
-} from './cloud-opening';
-import { cloudSpeech, getCloudStatus, withCloudLock } from './cloud';
+} from './video/cloud-opening';
+import { cloudSpeech, getCloudStatus, withCloudLock } from './cloud/cloud';
 
-import { videoEditRouter, getLatestVideoEditJob } from './video-edit';
-import { getVideoUploadStatus } from './video-upload';
-import { acquireMediaSlot } from './media-queue';
-import { getLocalSpeechCapability, synthesizeSpeech } from './local-speech';
-import { getOriginalMusic } from './video-edit-music';
+import { videoEditRouter, getLatestVideoEditJob } from './video/video-edit';
+import { getVideoUploadStatus } from './video/video-upload';
+import { acquireMediaSlot } from './media/media-queue';
+import {
+  getLocalSpeechCapability,
+  synthesizeSpeech,
+} from './speech/local-speech';
+import { getOriginalMusic } from './video/video-edit-music';
 import { MusicTrack } from '../src/services/definition/music';
 
-import { copyRouter } from './copy';
-import { musicRouter, musicPreviewRouter } from './music-library';
-import { subtitlesRouter } from './subtitles';
-import { smartCleanRouter } from './smart-clean';
-import { getAccessPolicy } from './access-policy';
-import { installWorkspaceAuth, loadAuthCredentials } from './auth';
-import { loadActiveAccounts, getAccountId } from './account-repository';
-import { closeDatabase, databaseEnabled, verifyDatabase } from './database';
+import { copyRouter } from './copy/copy';
+import { musicRouter, musicPreviewRouter } from './music/music-library';
+import { subtitlesRouter } from './speech/subtitles';
+import { smartCleanRouter } from './clean/smart-clean';
+import { getAccessPolicy } from './auth/access-policy';
+import { installWorkspaceAuth, loadAuthCredentials } from './auth/auth';
+import { loadActiveAccounts, getAccountId } from './auth/account-repository';
+import { closeDatabase, databaseEnabled, verifyDatabase } from './db/database';
 import {
   prepareLocalStudioPort,
   stopPreviousLocalStudio,
-} from './port-recovery';
+} from './auth/port-recovery';
 import {
   getDatabaseCurrentDraft,
   saveDatabaseCurrentDraft,
   cleanupDatabaseDiscardedMedia,
   startDatabaseDraftCleanup,
-} from './database-current-draft';
-import { reserveStorage, storageLimits, MIB } from './storage-capacity';
+} from './draft/database-current-draft';
+import { reserveStorage, storageLimits, MIB } from './storage/storage-capacity';
 import {
   getCurrentDraft,
   saveCurrentDraft,
   cleanupDiscardedDraftMedia,
   startCurrentDraftCleanup,
-} from './current-draft';
+} from './draft/current-draft';
 
 storageLimits();
 
 const app = express();
+app.use(installApiEnvelope);
 const port = Number(process.env.PORT || 4318);
 const origin = `http://127.0.0.1:${port}`;
 const access = getAccessPolicy(port, process.env.PUBLIC_ORIGIN);
@@ -162,6 +167,7 @@ app.use(
   express.json({ limit: '2mb' }),
 );
 app.use(express.json({ limit: '256kb' }));
+app.use(normalizeApiJsonBody);
 app.use((_req, res, next) => {
   // Auth's earlier finish listener releases the request first; active jobs/streams still prevent deletion.
   const workspace = getWorkspace();

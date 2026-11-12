@@ -41,12 +41,14 @@ export function getVideoEditTimeline(project: VideoEditProject) {
           Math.floor(Math.min(...lengths) / 3),
         )
       : 0;
-  const overlap =
-    sources.some(
-      (source) => source.kind === HouseMediaKind.Video && source.video.hasAudio,
-    ) && project.houseVolume > 0
-      ? 0
-      : transitionFrames;
+  const hasAudibleSpeech =
+    (project.opening?.hasAudio && project.openingVolume > 0) ||
+    (project.houseVolume > 0 &&
+      sources.some(
+        (source) =>
+          source.kind === HouseMediaKind.Video && source.video.hasAudio,
+      ));
+  const overlap = hasAudibleSpeech ? 0 : transitionFrames;
   let cursor = coverFrames + openingFrames;
   const shots = project.shots.map((shot, index) => {
     if (index > 0 || openingFrames) cursor -= overlap;

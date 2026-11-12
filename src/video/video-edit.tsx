@@ -10,7 +10,11 @@ import {
   EDITORIAL_TEXT,
   EDITORIAL_TITLE,
 } from './editorial-template';
-import { VideoTemplate } from '../services/definition/project';
+import {
+  CoverStyle,
+  VideoTemplate,
+  VIDEO_PENDING_POSTER,
+} from '../services/definition/project';
 import {
   AbsoluteFill,
   Img,
@@ -89,7 +93,7 @@ function ShotCopy({
       <div
         style={{
           position: 'absolute',
-          top: 116,
+          top: 390,
           left: 84,
           right: 84,
           display: 'flex',
@@ -106,16 +110,7 @@ function ShotCopy({
           position: 'absolute',
           left: 84,
           right: 84,
-          bottom:
-            project.subtitlesEnabled ||
-            project.videoTemplate === VideoTemplate.Editorial
-              ? undefined
-              : 250,
-          top:
-            project.subtitlesEnabled ||
-            project.videoTemplate === VideoTemplate.Editorial
-              ? 240
-              : undefined,
+          top: 530,
           opacity: interpolate(
             frame,
             [0, VIDEO_EDIT_TIMING.captionFadeSeconds * fps],
@@ -135,13 +130,13 @@ function ShotCopy({
             marginBottom: 22,
           }}
         >
-          PROPERTY TOUR / {String(index + 1).padStart(2, '0')}
+          房屋实拍 · 第{index + 1}段
         </div>
         <div
           style={{
             ...(project.videoTemplate === VideoTemplate.Editorial &&
               EDITORIAL_TITLE),
-            fontSize: 84,
+            fontSize: 66,
             fontWeight: 500,
             lineHeight: 1.3,
             letterSpacing: 3,
@@ -167,7 +162,7 @@ function ShotCopy({
           position: 'absolute',
           left: 84,
           right: 84,
-          bottom: 112,
+          bottom: 350,
           borderTop: '1px solid rgba(248,245,238,.45)',
           paddingTop: 24,
           display: 'flex',
@@ -200,7 +195,7 @@ function OpeningIdentity({ project }: { project: VideoEditProject }) {
             : undefined,
       }}
     >
-      <div style={{ position: 'absolute', bottom: 128, left: 84, right: 84 }}>
+      <div style={{ position: 'absolute', bottom: 350, left: 84, right: 84 }}>
         <div style={{ fontSize: 46, fontWeight: 500, letterSpacing: 4 }}>
           {project.name}
         </div>
@@ -260,7 +255,7 @@ function PropertySummary({ project }: { project: VideoEditProject }) {
       <div
         style={{
           position: 'absolute',
-          bottom: 120,
+          bottom: 310,
           left: 84,
           fontSize: 25,
           opacity: 0.65,
@@ -412,6 +407,7 @@ export function VideoEditFilm({
             {!graphicsOnly && (
               <Video
                 src={project.opening.src}
+                fallbackOffthreadVideoProps={{ pauseWhenBuffering: true }}
                 objectFit="cover"
                 volume={musicOnly ? 0 : project.openingVolume}
                 style={{ width: '100%', height: '100%' }}
@@ -434,6 +430,7 @@ export function VideoEditFilm({
                 {!graphicsOnly && source?.kind === HouseMediaKind.Video && (
                   <Video
                     src={source.video.src}
+                    fallbackOffthreadVideoProps={{ pauseWhenBuffering: true }}
                     objectFit="cover"
                     trimBefore={Math.round(shot.start * fps)}
                     volume={musicOnly ? 0 : project.houseVolume}
@@ -486,7 +483,7 @@ export function VideoEditFilm({
         <ClosingInvitation project={project} />
       </Sequence>
       <SpeechSubtitles project={project} />
-      <Sequence from={timeline.coverFrames} layout="none" name="右下角水印">
+      <Sequence from={timeline.coverFrames} layout="none" name="左上角水印">
         <VideoWatermark text={project.watermark} />
       </Sequence>
     </AbsoluteFill>
@@ -495,7 +492,21 @@ export function VideoEditFilm({
 
 /** Freeze the selected video's actual first frame; uploaded images share the same lettering and crop. */
 export function VideoEditCover({ project }: { project: VideoEditProject }) {
+  const coverTemplate =
+    project.coverSource === CoverSource.Opening
+      ? VideoTemplate.Editorial
+      : project.coverSource === CoverSource.House
+        ? VideoTemplate.Classic
+        : project.videoTemplate;
   const first = getHouseMaterials(project)[0];
+  const detailImages = getHouseMaterials(project)
+    .slice(1, 3)
+    .map((material) =>
+      material.kind === HouseMediaKind.Image
+        ? material.src
+        : material.video.poster,
+    )
+    .filter((src) => src !== VIDEO_PENDING_POSTER);
   const clip =
     project.coverSource === CoverSource.Opening
       ? project.opening
@@ -522,6 +533,7 @@ export function VideoEditCover({ project }: { project: VideoEditProject }) {
           <Video
             src={clip.src}
             muted
+            fallbackOffthreadVideoProps={{ pauseWhenBuffering: true }}
             objectFit="cover"
             style={{ width: '100%', height: '100%' }}
           />
@@ -533,9 +545,20 @@ export function VideoEditCover({ project }: { project: VideoEditProject }) {
         facts={project.facts}
         extra={project.extra}
         contact={project.contact}
-        template={project.videoTemplate}
+        template={coverTemplate}
+        coverStyle={project.coverStyle}
+        detailImages={detailImages}
       />
-      <VideoWatermark text={project.watermark} />
+      <VideoWatermark
+        text={project.watermark}
+        portraitTop={
+          coverTemplate === VideoTemplate.Editorial
+            ? 0.05
+            : project.coverStyle === CoverStyle.New
+              ? 0.065
+              : 0.16
+        }
+      />
     </AbsoluteFill>
   );
 }

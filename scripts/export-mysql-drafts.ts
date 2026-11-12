@@ -10,7 +10,11 @@ import {
 } from '../src/services/definition/project';
 import { videoEditDraftSchema } from '../src/services/definition/video-edit';
 import { currentDraftSchema } from '../src/services/definition/current-draft';
-import { closeDatabase, queryRows, verifyDatabase } from '../server/database';
+import {
+  closeDatabase,
+  queryRows,
+  verifyDatabase,
+} from '../server/db/database';
 
 interface ExportRow extends RowDataPacket {
   workspaceId: string;

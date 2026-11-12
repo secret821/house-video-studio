@@ -5,6 +5,12 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { z } from 'zod';
+import {
+  apiEnvelopeSchema,
+  toCamelKey,
+  toSnakeKey,
+  transformKeys,
+} from '../src/services/definition/api-wire';
 
 import {
   DIMENSIONS,
@@ -20,6 +26,14 @@ import { getTimeline } from '../src/video/timeline';
 const origin = process.env.VERIFY_ORIGIN || 'http://127.0.0.1:4318';
 const runFile = promisify(execFile);
 
+function readSuccess(response: Response): Promise<unknown> {
+  return response.json().then((raw: unknown) => {
+    const envelope = apiEnvelopeSchema.parse(transformKeys(raw, toCamelKey));
+    assert.ok(response.ok && envelope.code === 0, envelope.message);
+    return envelope.data;
+  });
+}
+
 /** Keep HTTP failures explicit in the acceptance script as in the application. */
 function request(path: string, body?: unknown) {
   return fetch(
@@ -29,14 +43,9 @@ function request(path: string, body?: unknown) {
       : {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(body),
+          body: JSON.stringify(transformKeys(body, toSnakeKey)),
         },
-  ).then((response) =>
-    response.json().then((data: unknown) => {
-      assert.ok(response.ok, `API ${path}: ${JSON.stringify(data)}`);
-      return data;
-    }),
-  );
+  ).then(readSuccess);
 }
 
 /** Poll real work with a deadline; the 1s interval avoids hammering the local renderer. */
@@ -67,14 +76,17 @@ function verifyApi(project: Project) {
   return fetch(`${origin}/api/upload-image`, { method: 'POST', body: form })
     .then((response) => {
       assert.equal(response.status, 200);
-      return response.json();
+      return readSuccess(response);
     })
-    .then((asset: { src: string }) => {
+    .then((raw) => {
+      const asset = z.object({ src: z.string() }).parse(raw);
       assert.match(asset.src, /^\/media\/.+\.jpg$/);
       return fetch(`${origin}/api/create-render-job`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...project, scenes: [], opening: null }),
+        body: JSON.stringify(
+          transformKeys({ ...project, scenes: [], opening: null }, toSnakeKey),
+        ),
       });
     })
     .then((response) => {
@@ -85,7 +97,7 @@ function verifyApi(project: Project) {
           'Content-Type': 'application/json',
           Origin: 'https://example.com',
         },
-        body: JSON.stringify(project),
+        body: JSON.stringify(transformKeys(project, toSnakeKey)),
       });
     })
     .then((response) => {
@@ -93,12 +105,17 @@ function verifyApi(project: Project) {
       return fetch(`${origin}/api/create-render-job`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...project,
-          scenes: [
-            { ...project.scenes[0], src: 'http://127.0.0.1/private.jpg' },
-          ],
-        }),
+        body: JSON.stringify(
+          transformKeys(
+            {
+              ...project,
+              scenes: [
+                { ...project.scenes[0], src: 'http://127.0.0.1/private.jpg' },
+              ],
+            },
+            toSnakeKey,
+          ),
+        ),
       });
     })
     .then((response) => {
@@ -131,9 +148,10 @@ function verifyApi(project: Project) {
     })
     .then((response) => {
       assert.equal(response.status, 200);
-      return response.json();
+      return readSuccess(response);
     })
-    .then((asset: { duration: number }) => {
+    .then((raw) => {
+      const asset = z.object({ duration: z.number() }).parse(raw);
       assert.equal(asset.duration, 16);
     });
 }
@@ -280,7 +298,7 @@ source
     return fetch(`${origin}/api/create-render-job`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(details.project),
+      body: JSON.stringify(transformKeys(details.project, toSnakeKey)),
     }).then((response) => {
       assert.equal(response.status, 409, '并发导出必须返回可重试的忙碌状态');
       return details;

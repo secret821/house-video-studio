@@ -14,7 +14,7 @@ import { promisify } from 'node:util';
 import {
   SMART_CLEAN_MODELS,
   SMART_CLEAN_VERSION,
-} from '../server/smart-clean-models';
+} from '../server/clean/smart-clean-models';
 const directory = resolve(
   process.env.STUDIO_SMART_CLEAN_DIR || '.runtime/smart-clean',
 );

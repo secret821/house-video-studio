@@ -44,7 +44,7 @@ COPY scripts ./scripts
 COPY public ./public
 COPY deploy/docker/entrypoint.sh /usr/local/bin/studio-entrypoint
 RUN sha256sum --check .runtime/SHA256SUMS \
-    && node --import tsx --input-type=module -e "import {getPrebuiltVideoBundle,VideoBundleKind} from './server/video-bundles.ts';getPrebuiltVideoBundle(VideoBundleKind.Photo,process.cwd());getPrebuiltVideoBundle(VideoBundleKind.Real,process.cwd())" \
+    && node --import tsx --input-type=module -e "import {getPrebuiltVideoBundle,VideoBundleKind} from './server/video/video-bundles.ts';getPrebuiltVideoBundle(VideoBundleKind.Photo,process.cwd());getPrebuiltVideoBundle(VideoBundleKind.Real,process.cwd())" \
     && node --import tsx scripts/setup-smart-clean.ts \
     && if [ "$ENABLE_ASR" = 1 ]; then PIP_INDEX_URL="$PIP_INDEX_URL" node --import tsx scripts/setup-asr.ts && rm -rf .runtime/asr/pip-cache; fi \
     && .runtime/compositor/ffmpeg -v error -f lavfi -i color=c=black:s=16x16:r=1 -frames:v 1 -f null - \

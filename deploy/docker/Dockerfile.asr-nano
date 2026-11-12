@@ -5,7 +5,7 @@ USER root
 RUN apt-get update && apt-get install -y --no-install-recommends cmake g++ make \
     && rm -rf /var/lib/apt/lists/*
 ENV STUDIO_ASR_ENGINE=nano STUDIO_ASR_DIR=/app/.runtime/asr-nano
-COPY server/subtitles.ts ./server/subtitles.ts
+COPY server/speech/subtitles.ts ./server/speech/subtitles.ts
 COPY scripts/asr-download.py scripts/asr-nano-download.py scripts/asr-nano-inference.py scripts/asr_nano_alignment.py scripts/asr-nano-requirements.txt scripts/setup-asr.ts ./scripts/
 # This context contains only checksum-pinned public assets; never copy a developer runtime wholesale.
 COPY .runtime/asr-nano/model ./.runtime/asr-nano/model
@@ -16,7 +16,7 @@ FROM ${STUDIO_BASE_IMAGE} AS runtime
 USER root
 ENV STUDIO_ASR_ENGINE=nano STUDIO_ASR_DIR=/app/.runtime/asr-nano
 COPY --from=asr-build /app/.runtime/asr-nano /app/.runtime/asr-nano
-COPY --from=asr-build /app/server/subtitles.ts /app/server/subtitles.ts
+COPY --from=asr-build /app/server/speech/subtitles.ts /app/server/speech/subtitles.ts
 COPY --from=asr-build /app/scripts/asr-download.py /app/scripts/asr-nano-download.py /app/scripts/asr-nano-inference.py /app/scripts/asr_nano_alignment.py /app/scripts/asr-nano-requirements.txt /app/scripts/setup-asr.ts /app/scripts/
 RUN chmod -R a+rX /app/.runtime/asr-nano
 USER node

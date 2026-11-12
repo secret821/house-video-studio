@@ -1,10 +1,10 @@
 # Docker 部署
 
-面向新购的 Linux x86_64 服务器，推荐4核4GiB、一次执行一个重型媒体任务。购买页的Docker CE镜像只是预装Docker；本仓库的Dockerfile才负责构建房源视频应用。2026-11-03 腾讯云新站已将提交 `36b73d9` 的完整版本与 MySQL 账号/草稿迁移一同切换，正式镜像为 `house-video-studio:20261103-full`。建表、迁移和回滚见 [MySQL 接入说明](../mysql.md)，本次验证见 [验收记录](../../docs/verification.md)。下方较早的候选与冻结镜像说明保留作历史记录。
+面向新购的 Linux x86_64 服务器，推荐4核4GiB、一次执行一个重型媒体任务。购买页的Docker CE镜像只是预装Docker；本仓库的Dockerfile才负责构建房源视频应用。2026-11-08 腾讯云新站已切换封面来源与手机预览修复版 `house-video-studio:20261108-cover-mobile`；上一版为 `20261107-cover-tune`。建表、迁移和回滚见 [MySQL 接入说明](../mysql.md)，本次验证见 [验收记录](../../docs/verification.md)。下方较早的候选与冻结镜像说明保留作历史记录。
 
 腾讯云新站为`http://106.54.221.18`，应用位于`/opt/house-video-studio-docker`，Compose管理单容器，宿主机Nginx代理到127.0.0.1:4340。2026-10-31已按用户要求迁移两个原账号并实际验证相同用户名/密码可登录，旧素材、成片、任务和登录记录未迁移，旧阿里云服务继续保留。迁移基线镜像`house-video-studio:20261031-migration-current`（SHA256 b1b3392e0ab60756d25e6a2e8a61b0fea41c7dff83fe55bc3f58c087856bf253）对应旧站正式watermark-subtitles版本，Next构建RlIPVLm_imjay0YYQFXuN。三份MP4、实际字幕识别/排队取消、水印抽帧、智能清理、隔离、重启登录与公网HTTP检查通过；候选峰值1298448384字节、无OOM，未据短样片承诺长片性能。浏览器自动化因来源权限被拒绝，不能声称页面交互验收完成。完整记录见[验证记录](../../docs/verification.md)。
 
-根目录Dockerfile是完整源码构建路径；本次正式版迁移使用`Dockerfile.prebuilt`包装已构建且摘要匹配的产物，不把本机其他未验收代码发布。早先本机磁盘不足的构建失败仍是历史记录，不代表新机镜像构建失败。
+根目录Dockerfile是完整源码构建路径；2026-10-31迁移使用`Dockerfile.prebuilt`包装已构建且摘要匹配的产物。2026-11-04版本以`20261103-full`为基础，覆盖本地冻结运行源码、Next产物及双视频包，增装锁定的TanStack Query依赖，沿用已验收的Linux模型运行时。早先本机磁盘不足的构建失败仍是历史记录，不代表新机镜像构建失败。
 
 仓库通用Dockerfile仍不会自动安装房源截图OCR，直接按通用路径重建会使按钮禁用。当前线上冻结镜像已单独在Linux内运行`STUDIO_OCR_HEADLESS=1 pnpm setup:ocr`并完成离线自检，使用RapidOCR 3.9.2、ONNX Runtime CPU及无界面OpenCV；不要复制macOS虚拟环境。重新发布时须同时包含OCR白名单文件、Next产物和与源码指纹匹配的完整双视频包。
 
@@ -17,9 +17,71 @@ sudo docker compose --env-file docker.env logs --tail 100
 sudo systemctl status nginx
 ```
 
-最终切换前检查两个账号无活动上传/生成/识别，且新站无用户业务文件，仅保存Compose与环境文件元数据到`backups/migration-current-20261031`；没有保存或恢复会话快照。基础镜像标签`20261031-migration`保留用于受控回退，但缺少后续水印/ASR能力；需要这些能力时旧阿里云站仍可用。回退或未来重建仍会按临时模式清空业务媒体，应先确认任务与下载状态，不能自动重启正在使用的服务。
+## 当前运行版本（2026-11-08 封面来源与手机预览）
 
-## 当前运行版本（2026-11-03房源截图OCR）
+正式镜像 `house-video-studio:20261108-cover-mobile`（ID `sha256:fe44cdd658eaa95ccd5e8c96e1565c135a1fc3362190627bf3cbbe57e65018f9`）以 `20261107-cover-tune` 为基础，仅更新 `src/video/video-edit.tsx`、`src/features/studio/photo/cover-settings.tsx`，以及对应 Next 产物和两套视频包。封面排版按当前底图来源选择人物或房屋样式，上传独立底图沿用当前模板；模板示例图仍只放大预览。Remotion 原片在 HTML 视频回退路径缓冲时暂停预览时间轴。发布包 SHA256 `c95c5c26cb2970fcfdf86f0ca4979a8471ff70d5bf1ffde7a8f0e2cb5e53dc0a`，服务器候选目录 `/home/ubuntu/studio-cover-mobile-20261108`。
+
+切换前正式任务文件仅有 2 个 complete，无 5 分钟内新写文件；临时目录约 368 MiB，按重启规则清理。原 `compose.yaml`、`docker.env` 备份于 `backups/cover-mobile-20261108`。候选隔离服务及浏览器验收完成后已停止；正式服务 healthy、OOM=false、重启 0，双视频包指纹通过，公网登录页 200、匿名编辑页 303、匿名 API 401。回滚前检查新任务及需下载的临时结果，恢复备份中的 `docker.env` 和 `compose.yaml`，再执行 `sudo docker compose --env-file docker.env up -d --no-build --force-recreate`；回滚重建也会按规则清理临时结果。实体 iPhone/微信长片尚未复测。
+
+## 上一运行版本（2026-11-07 人物封面回退与经典价格字调亮）
+
+最终候选镜像 `house-video-studio:20261107-cover-tune`，镜像 ID `sha256:ae3ba51b13fe97672e8e6fdb7506cc33513b1e99efdf4714105bf162ae0087c2`，替代下方仅含人物封面回退的旧候选。以当前正式镜像 `20261106-wechat-safe` 为基础，加入人物封面回退、经典实拍封面总价字色从 `#c05a55` 调至 `#ef8b7c`，及两张由同一组件生成的参考图；封面位置、描边、房源文字、音轨和时长不变。逐文件核对冻结源码：164 份运行文件里除本轮五份外其余 159 份与正式镜像一致，本地其他未上线改动未纳入。洁净发布包 SHA256 `233930fb82471e69d9d44c04d3398675271ec0f2c8e73f84164da7929079c89b`，位于 `artifacts/classic-price-bright-20261107/` 及服务器 `/home/ubuntu/studio-cover-tune-20261107/`。
+
+本地 lint、format:check、typecheck、视频包与 Next 构建通过；本轮生成缓存使磁盘短暂低于上传测试预留空间，删除本轮构建缓存后重跑 186/186 测试通过。经典实拍实际 MP4 为 1080×1920 H.264/AAC、5.611 秒，首帧与片内帧已核对。Linux 隔离候选登录页 200、匿名编辑页 303，两套视频包验证通过；Remotion Chromium 分别渲染两套 1080×1920 封面，人物封面 PNG 与仅回退候选逐字节一致，经典价格字更亮；无 OOM/重启，隔离容器已停止。微信真机未复测。用户明确允许切换并清空临时结果后，备份原 `compose.yaml`、`docker.env` 于 `backups/cover-tune-20261107`，将 `STUDIO_IMAGE` 切至 `20261107-cover-tune` 并重建正式容器。切换前无运行任务，旧临时成片及缓存按重启规则清空；稳定上传原片目录保留，切换前约 689 MiB、切换后约 699 MiB。切换后新业务任务可继续产生临时文件，不能把当前临时目录视为持续为空。正式容器 healthy、OOM=false、重启 0，双视频包校验通过；公网登录页 200、匿名编辑页 303、匿名业务 API 401。回退前检查新任务及需下载的临时结果，恢复上述备份并执行 `docker compose --env-file docker.env up -d --no-build --force-recreate`；回退重建也会清空临时结果。
+
+## 已替代候选（2026-11-07 仅杂志留白人物封面回退）
+
+候选镜像 `house-video-studio:20261107-editorial-rollback`，镜像 ID `sha256:55e6e262b2eea6754386041f6f11b3c75673c3c1813d6d796bfcaa7cf053940b`。以当前正式镜像 `20261106-wechat-safe` 为基础，只叠加人物封面相关三个视频源码文件、杂志封面参考图及从冻结线上源码重建的 Next 产物和完整双视频包。冻结源码对比 164 份运行文件，除本轮四项外其余 160 份与正式镜像一致；本地工作区另外三处未上线改动没有进入候选。洁净归档 SHA256 `e8a5d2fdc73c80f7e4448582ef15a932708e64ac1f1e0cf9f9812f16004aa9f0`，位于 `artifacts/editorial-cover-rollback-20261107/` 和服务器 `/home/ubuntu/studio-editorial-rollback-20261107/`。
+
+本地 lint、格式、类型、Next 构建、双视频包构建和 186 项测试通过。Remotion Chromium 实际渲染两套封面，经典封面与回退前 PNG 逐字节一致；杂志实拍 MP4 为 1080×1920 H.264/AAC、5.611 秒。Linux 隔离候选的登录页 200、匿名编辑页 303，双视频包校验通过，实际输出 1080×1920 的杂志封面 PNG；无 OOM/重启。微信真机尚未复测。正式服务当前有约 283 MiB 临时成片及缓存，其中两条今天新生成；切换会清空，已请用户确认后再切换。
+
+## 上一运行版本（2026-11-06 微信竖屏文字避让）
+
+候选镜像 `house-video-studio:20261106-wechat-safe`，镜像 ID `sha256:c7f70d62115267adb3a2c0985505154c282ecfd061ca301185b8aef50108d11d`。正式版与本地源码逐文件比对仅有本轮四个视频画布文件及两张模板参考图不同；候选叠加当前 Next 构建和两套视频包。由于正式镜像已达到 Docker 层数限制，先从正在运行的正式容器导出不含业务挂载卷的文件系统，导入为单层 `20261106-flat-base`，再叠加本轮内容；原正式容器没有中断。
+
+Linux 隔离候选以 3CPU/2560MiB 验收首页、实拍与照片页均返回 200，经典原生、杂志原生和杂志浏览器三条 1080×1920 H.264/AAC 成片时长分别为 5.600、5.600、5.611 秒，峰值约 1.09 GiB，OOM/重启 0；候选测试容器已停止，镜像保留。视觉抽帧、源码摘要、构建上下文和报告位于 `artifacts/wechat-safe-area-20261106/`。本轮未完成交互式浏览器自动化或微信真机复测。
+
+用户明确允许切换并清空临时结果后，已备份原 `compose.yaml`、`docker.env` 于 `backups/wechat-safe-20261106`，仅将 `STUDIO_IMAGE` 切至 `house-video-studio:20261106-wechat-safe` 并重建 Compose 服务。切换前的临时任务与成片按现有重启规则清空；稳定上传原片目录切换后仍为约 534 MiB。正式容器运行中、OOM=false、重启 0，双视频包校验通过；公网登录页 200、匿名编辑页 303、匿名业务 API 401。切换后新业务可继续产生临时文件，不能把当前临时目录视为持续为空。回退镜像 `20261104-cover-center` 仍保留；回退前检查任务与需下载的临时结果，恢复上述备份并执行 `docker compose --env-file docker.env up -d --no-build --force-recreate`，重建仍会清空临时结果。
+
+## 上一运行版本（2026-11-04 经典封面居中总价）
+
+正式镜像 `house-video-studio:20261104-cover-center`，镜像 ID `sha256:6f7024ecbeed35cb3298f5376a872120f58ec79b0371f55eb9f7091a43f828bb`，Next 构建 `7mnXhPpmFxCTE6jEk20r9`。经典实拍取消右下角红色价格卡及卡内“总价”标签，把低饱和红色描边总价字放到画面中部并水平居中；附加特点在总价下方，联系文字在底部，房屋画面连续可见。模板选择说明同步改为“居中总价”。人物封面样式、价格条和两套标题位置沿用前版。
+
+从完整 `20261104-cover-muted` Linux 镜像叠加本轮 `src/video/editorial-template.tsx`、`src/services/definition/project.ts`、两张当前模板图、Next 产物和完整双视频包，避免层数过深；洁净归档 SHA256 `ffd53296b1a05a33389d7038aa42887685e965962ed23e6814324ff595fd6bef`。本地 lint、format:check、typecheck、Next 与双视频包构建和 185 项测试通过。Linux 隔离候选在 3CPU/2560MiB 下完成经典原生、杂志原生、杂志浏览器三条 1080×1920 H.264/AAC MP4；候选浏览器核对经典放大预览和新模板说明，视频第 0 帧显示居中总价且无卡片。候选无 OOM/重启，两套视频包指纹通过；短片不代表长片资源上限。改前、改后全尺寸封面和 315×405 三列裁切保存在 `artifacts/cover-classic-center-20261104/`。
+
+切换前正式站无运行任务及近 3 分钟新业务文件，原片目录约 236 MiB。只备份原 `compose.yaml`、`docker.env` 到 `backups/cover-center-20261104`；原片目录切换后仍约 236 MiB，临时成片按现有重启规则清理。正式容器 healthy、OOM=false、重启 0，数据库与双视频包校验通过；公网登录页 200、匿名编辑页 303、匿名业务 API 401。未使用正式账号做浏览器交互；旧阿里云站未改，Git 未推送。
+
+回退前检查任务空闲及需要下载的临时成片，再恢复 `backups/cover-center-20261104` 的 `docker.env`、`compose.yaml`，执行 `docker compose --env-file docker.env up -d --no-build --force-recreate`；保留的上一版镜像为 `house-video-studio:20261104-cover-grid`，重建仍会清理临时成片。
+
+## 上一运行版本（2026-11-04 双模板缩略图标题）
+
+正式镜像 `house-video-studio:20261104-cover-grid`，镜像 ID `sha256:dcbe264193fbb66f9e6ff2ae95a1785a75ef2473555763fe3fb1ed1133bd52e7`，Next 构建 `AnLzxR7svKLn017aYzXof`。经典实拍的白色黑描边标题从 150px 缩至 122px、顶部从 165px 下移至 310px；杂志留白继续沿用上一版已调整的标题和副标题。两张参考图和双视频包随 Next 同包重建。以 `20261104-cover-muted` 为 Linux 基础镜像叠加两套封面的当前源码、两张参考图、Next 产物和双视频包，洁净归档 SHA256 `82974ef741b606d512c6280d61bb80a52b40ea817abc49b0e3491bb0d45dfadd`；直接从上一版嵌套叠加曾触发 Docker max depth，改从完整基线叠加后指纹校验通过。
+
+本地 lint、format:check、typecheck、Next 与双视频包构建、185 项测试通过。Linux 3CPU/2560MiB 隔离候选生成经典原生、杂志原生、杂志浏览器三条 1080×1920 H.264/AAC MP4，浏览器放大预览核对双模板，经典缩略图的原版/新版居中裁切证据在 `artifacts/cover-title-position-20261104/`。切换前正式站无运行任务及近 3 分钟新业务文件，原片目录约 236 MiB；Compose 和环境元数据备份于 `backups/cover-grid-20261104`。正式镜像源文件摘要与本地相同，原片目录保持，临时成片仍按现有重启规则清理。正式账号浏览器交互和长片资源上限未在本轮复验。旧阿里云站未改，Git 未推送。
+
+回退前确认任务空闲与临时成片下载情况，再恢复 `backups/cover-grid-20261104` 的 `docker.env`、`compose.yaml`，执行 `docker compose --env-file docker.env up -d --no-build --force-recreate`；旧镜像 `house-video-studio:20261104-cover-title` 保留。重建仍会清理临时成片。
+
+## 上一运行版本（2026-11-04 人物封面标题下移）
+
+正式镜像 `house-video-studio:20261104-cover-title`，镜像 ID `sha256:56a30a7df16302141bf9481bef4beae83fa60838482ab1e0f221f32e657e6b50`，Next 构建 `PE4iAIIiyzHtpV7gTau3g`。基于上版完整本地运行镜像，仅叠加 `src/video/editorial-template.tsx`、杂志参考图、Next 产物和源码指纹匹配的完整双视频包；洁净归档 SHA256 `0785ce35d942d9b01f4e9506a5492331db227097af8bdfdc6b889f7454d07b65`。人物封面标题由 150px 改为 122px、副标题由 91px 改为 72px，文字组自顶部 150px 下移到 310px；经典封面布局不变。三列缩略图居中裁切对比证据在 `artifacts/cover-title-position-20261104/`。
+
+本地 lint、format:check、typecheck、Next 与双视频包构建、185 项测试通过。隔离 Linux 候选在 3CPU/2560MiB 下完成经典原生、杂志原生、杂志浏览器三条实际 1080×1920 H.264/AAC MP4；候选浏览器核对了模板卡与放大图，无 OOM/重启。切换前正式任务均为 complete 且近 3 分钟无新业务文件，原片目录约 236 MiB；Compose 与 `docker.env` 元数据备份在 `backups/cover-title-20261104`。重建后原片目录仍为 236 MiB，临时成片按现有模式清理。正式镜像健康、OOM=false、重启 0，数据库与两套视频包通过校验；公网登录页 200、匿名编辑页 303、匿名业务 API 401。未使用正式账号进行浏览器交互；短片不代表长片资源上限。旧阿里云站未改，Git 未推送。
+
+回退前确认没有正在运行的任务且用户已下载需要保留的临时成片，再恢复 `backups/cover-title-20261104` 中的 `docker.env` 和 `compose.yaml`，执行 `docker compose --env-file docker.env up -d --no-build --force-recreate`。保留的旧镜像为 `house-video-studio:20261104-cover-muted`；重建仍会按现有临时模式清理成片。
+
+## 上一运行版本（2026-11-04 封面暗红）
+
+正式镜像 `house-video-studio:20261104-cover-muted`，镜像 ID `sha256:b4cbae5fba12a6e72de395238ffc3320f8865e814e2146628976c59f3d733deb`，Next 构建 `OpGJChlratBuPnI2DRnDl`。用户要求两套封面价格区域降低亮度和饱和度，并将当前本地完整版本上线。本轮冻结当前运行源码和依赖，以旧正式镜像为 Linux 运行时基础覆盖 `src/server/scripts/public`、Next 产物与完整双视频包；候选目录为 `/home/ubuntu/studio-cover-muted-20261104`，洁净源码包 SHA256 `6dde6faaa43eb01b8c90500fa41f154f85791b3b4761c04f1c471b8cac643128`。旧 Git 修订标签为基础镜像继承元数据，不代表本轮未提交工作区源码。
+
+本地 lint、格式、类型、Next 与双视频包构建、185 项测试通过；同资源限制 Linux 候选实际生成经典原生、杂志原生、杂志浏览器合成三条 1080×1920 H.264/AAC MP4，时长 5.600、5.600、5.611 秒。浏览器核对本地与 Linux 候选双模板卡片及放大预览；首次 macOS 归档混入 `._` 文件而触发视频包指纹拒绝，清理附加文件并用 `COPYFILE_DISABLE=1` 重制洁净包后通过。证据在 `artifacts/cover-muted-20261104/`，不将短片视为长片资源上限。
+
+切换前所有线上渲染任务均完成，原片目录约 236 MiB；重建后原片目录仍为 236 MiB，临时结果按既有规则清理。仅备份原 `compose.yaml`、`docker.env` 于 `backups/cover-muted-20261104`，旧镜像保留；MySQL、认证、会话与 Nginx 配置未改。新容器 `healthy`、OOM=false、重启数 0，数据库与双视频包指纹通过；公网登录页 200、匿名编辑页 303 跳登录、匿名业务 API 401。正式账号浏览器交互未覆盖；候选浏览器截图不作为正式站登录验收。
+
+回退时先检查运行任务及需要下载的临时成片，再从 `backups/cover-muted-20261104` 恢复 `compose.yaml` 与 `docker.env`，使用保留的 `house-video-studio:20261103-full` 镜像执行 `docker compose --env-file docker.env up -d --no-build --force-recreate`。该旧版不含本轮目录重构和新封面，旧代码与当前草稿字段兼容性须在回退前核对；任何重建仍按临时模式清理成片。旧阿里云站未更新，Git 未推送。
+
+2026-10-31迁移基线切换前检查两个账号无活动上传/生成/识别，且新站无用户业务文件，仅保存Compose与环境文件元数据到`backups/migration-current-20261031`；没有保存或恢复会话快照。基础镜像标签`20261031-migration`保留用于受控回退，但缺少后续水印/ASR能力；需要这些能力时旧阿里云站仍可用。回退或未来重建仍会按临时模式清空业务媒体，应先确认任务与下载状态，不能自动重启正在使用的服务。
+
+## 历史版本（2026-11-03房源截图OCR）
 
 正式镜像为`house-video-studio:20261103-property-ocr`，SHA256 `6fe7fa56054ff20d8c94532df92a495dfc3c5871ec63f58ad8dc6081debbf37b`，Next `dl1lz77686aykzf_NBaHj7993837127`。从已上线的`20261103-opening-removal`镜像及其源码冻结，只叠加截图OCR、文本解析、对应API/UI/契约、`setup:ocr`脚本与重新构建的Next和完整双视频包；未将当前工作区的MySQL或其他未发布改动带入。Linux镜像内中文离线自检和双视频包源码指纹校验通过。
 
@@ -185,7 +247,7 @@ docker compose --env-file deploy/docker/.env logs --tail 100
 
 构建缓存、旧镜像、验收文件与业务媒体是不同清理范围。既有每日验收维护脚本继续由宿主机独立运行，只处理已标记完成的验收目录；它不清除Docker卷、镜像或构建缓存。
 
-本次冻结正式版没有带入本机尚未发布的存储准入改动，不能仅凭Compose中的容量环境变量声称新站已经启用5GiB硬配额。两小时临时清理仍由已上线应用执行。旧机的每日验收timer没有自动迁入新机；新机本轮独立测试容器及其测试账号、业务data和会话会在取证后删除，保留的公开样片/报告不属于用户媒体。
+当前版本已启用账号存储预算和磁盘预留：缺省每账号 5 GiB、至少预留 1 GiB，可用 `STUDIO_WORKSPACE_LIMIT_MIB` 和 `STUDIO_MIN_DISK_FREE_MIB` 调整；这是应用准入预算，不是文件系统硬配额。临时任务、缓存和成片仍由应用在空闲 2 小时或重启后清理；原片和当前草稿位于持久目录。旧机的每日验收 timer 没有自动迁入新机；独立候选的测试数据须按验收目录保留规则处理，不作为账号业务数据回放。
 
 ## 2026-10-31 滑块对齐（上一版本）
 

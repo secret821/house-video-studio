@@ -1,6 +1,7 @@
 **
 !server/
-!server/subtitles.ts
+!server/speech/
+!server/speech/subtitles.ts
 !scripts/
 !scripts/asr-download.py
 !scripts/asr-nano-download.py

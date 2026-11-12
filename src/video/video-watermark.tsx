@@ -1,7 +1,13 @@
 /** A static coral lettering mark shared by preview, cover, full rendering and native graphics layers. */
 import { useVideoConfig } from 'remotion';
 
-export function VideoWatermark({ text }: { text: string }) {
+export function VideoWatermark({
+  text,
+  portraitTop = 0.16,
+}: {
+  text: string;
+  portraitTop?: number;
+}) {
   const { width, height } = useVideoConfig();
   const value = text.trim();
   if (!value) return null;
@@ -17,7 +23,9 @@ export function VideoWatermark({ text }: { text: string }) {
       style={{
         position: 'absolute',
         left: Math.round(shortSide * 0.05),
-        top: Math.round(shortSide * 0.05),
+        top: Math.round(
+          height > width ? height * portraitTop : shortSide * 0.1,
+        ),
         maxWidth,
         fontFamily: 'Noto Serif CJK SC, Songti SC, SimSun, serif',
         fontSize,

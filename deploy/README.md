@@ -2,7 +2,9 @@
 
 腾讯云新站`http://106.54.221.18`的单容器部署、账号迁移与验收状态见 [Docker部署](docker/README.md)。旧阿里云systemd/宝塔服务继续保留，本页后续发布记录属于旧机；不得将新4核服务器的Compose限额套用到原2核2GiB机器，也不自动停止旧站。
 
-当前腾讯云正式版为 2026-11-03 完整本地版本 `house-video-studio:20261103-full`，包括两套模板、房源截图 OCR 与 MySQL 账号/草稿。下文“本地候选”描述仅指旧阿里云机器当时的历史状态。最新发布、回退与验证见 [Docker 部署](docker/README.md) 和 [验收记录](../docs/verification.md)。
+当前腾讯云正式版为 2026-11-07 的 `house-video-studio:20261107-cover-tune`，人物封面已恢复到 11 月 6 日调整前，经典实拍总价字色已调亮；两套标题缩小下移、杂志留白暗红价格条、房源截图 OCR、MySQL 账号/草稿及本地编辑器结构更新继续沿用。下文“本地候选”描述仅指旧阿里云机器当时的历史状态。最新发布、回退与验证见 [Docker 部署](docker/README.md) 和 [验收记录](../docs/verification.md)。
+
+2026-11-06 的微信竖屏文字避让版 `house-video-studio:20261106-wechat-safe` 曾按用户授权切换至正式服务；切换清空了此前的临时任务与成片，稳定上传原片保留。候选验收及正式检查见 [Docker 部署](docker/README.md)。
 
 ## 磁盘维护
 

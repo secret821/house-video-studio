@@ -10,12 +10,12 @@ import {
 } from 'node:fs';
 import { resolve } from 'node:path';
 import { z } from 'zod';
-import { DATA, UPLOADS, inspectAudio } from '../server/media';
+import { DATA, UPLOADS, inspectAudio } from '../server/media/media';
 import {
   parseProxyCopy,
   proxyModelsSchema,
   proxyRequest,
-} from '../server/model-proxy';
+} from '../server/cloud/model-proxy';
 import { projectSchema } from '../src/services/definition/project';
 const directory = resolve(DATA, 'house-tour-v2');
 const projectPath = resolve(directory, 'project.json');

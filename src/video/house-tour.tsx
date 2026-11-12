@@ -55,7 +55,7 @@ function MotionPhoto({ scene, frames }: { scene: Scene; frames: number }) {
 /** Divide the current scene's spoken duration among readable sentence captions. */
 function SceneCaption({ scene, frames }: { scene: Scene; frames: number }) {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const lines = getCaptionLines(scene.caption || scene.narration);
   const spokenFrames = scene.voiceover
     ? scene.voiceover.duration * fps
@@ -69,7 +69,7 @@ function SceneCaption({ scene, frames }: { scene: Scene; frames: number }) {
     <div
       style={{
         position: 'absolute',
-        bottom: '12%',
+        bottom: width > height ? '35%' : '33%',
         left: '8%',
         right: '8%',
         textAlign: 'center',
@@ -122,7 +122,7 @@ function PhotoScene({
           position: 'absolute',
           left: '8%',
           right: '8%',
-          top: width > height ? '42%' : '22%',
+          top: width > height ? '42%' : '35%',
           fontSize: Math.min(width, height) * 0.078,
           fontWeight: 600,
           color: 'white',
@@ -184,10 +184,8 @@ function PhotoTour({ project }: { project: Project }) {
       <div
         style={{
           position: 'absolute',
-          // Landscape titles need a separate row beneath the shared upper-left watermark.
-          top: project.watermark.trim()
-            ? Math.max(height * 0.07, Math.min(width, height) * 0.12)
-            : height * 0.07,
+          // Keep the portrait heading below the watermark and mobile playback controls.
+          top: project.watermark.trim() ? height * 0.2 : height * 0.16,
           left: '8%',
           right: '8%',
           color: 'white',
@@ -202,7 +200,7 @@ function PhotoTour({ project }: { project: Project }) {
             marginBottom: 16,
           }}
         >
-          HOUSE TOUR · {project.demo ? '演示房源' : '房源实景'}
+          {project.demo ? '演示房源' : '房源实景'}
         </div>
         <div
           style={{
@@ -229,7 +227,7 @@ function PhotoTour({ project }: { project: Project }) {
       <div
         style={{
           position: 'absolute',
-          bottom: '5%',
+          bottom: width > height ? '5%' : '19%',
           left: '8%',
           right: '8%',
           color: 'white',
@@ -262,7 +260,7 @@ function OpeningCaption({
   duration: number;
 }) {
   const frame = useCurrentFrame();
-  const { fps, width } = useVideoConfig();
+  const { fps, width, height } = useVideoConfig();
   const lines = getCaptionLines(script);
   const index = Math.min(
     lines.length - 1,
@@ -272,7 +270,7 @@ function OpeningCaption({
     <div
       style={{
         position: 'absolute',
-        bottom: '12%',
+        bottom: width > height ? '12%' : '25%',
         left: '8%',
         right: '8%',
         color: 'white',
@@ -312,7 +310,7 @@ export function HouseTour({ project }: { project: Project }) {
               <div
                 style={{
                   position: 'absolute',
-                  top: '5%',
+                  top: '16%',
                   right: '7%',
                   fontSize: width * 0.024,
                   color: 'white',

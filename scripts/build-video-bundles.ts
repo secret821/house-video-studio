@@ -6,7 +6,7 @@ import { resolve } from 'node:path';
 import {
   getVideoBundleFingerprint,
   VideoBundleKind,
-} from '../server/video-bundles';
+} from '../server/video/video-bundles';
 
 const root = process.cwd();
 const fingerprint = getVideoBundleFingerprint(root);

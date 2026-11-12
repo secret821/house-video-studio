@@ -3,7 +3,7 @@ import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import { AntdRegistry } from '@ant-design/nextjs-registry';
 
-import { StudioProvider } from '@/features/studio/studio-provider';
+import { StudioProvider } from '@/features/studio/shell/studio-provider';
 import '../theme.css';
 
 export const metadata: Metadata = {

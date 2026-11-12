@@ -29,4 +29,4 @@
 
 ## 公共控件入口
 
-所有页面从studio/common使用封装UI；公共按钮外观用ButtonAppearance表达实心/描边，尺寸与文字换行集中在common/controls.css，颜色仍由StudioProvider与token统一管理。页面不再手工添加studio-button/studio-primary/island-action外观类。主题与业务布局保持上述规范。
+所有页面从`src/share/ui`使用封装UI；公共按钮外观用ButtonAppearance表达实心/描边，尺寸与文字换行集中在`src/share/ui/controls.css`，颜色仍由StudioProvider与token统一管理。页面不再手工添加studio-button/studio-primary/island-action外观类。主题与业务布局保持上述规范。

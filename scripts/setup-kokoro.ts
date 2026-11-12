@@ -9,8 +9,8 @@ import {
   KOKORO_MODEL,
   KOKORO_REVISION,
   KOKORO_VOICE,
-} from '../server/local-speech';
-import { inspectAudio } from '../server/media';
+} from '../server/speech/local-speech';
+import { inspectAudio } from '../server/media/media';
 
 const run = promisify(execFile);
 const runtime = getKokoroRuntime();

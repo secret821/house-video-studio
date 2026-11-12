@@ -15,6 +15,8 @@ import {
   VIDEO_PENDING_POSTER,
   VideoTemplate,
   videoTemplateSchema,
+  CoverStyle,
+  coverStyleSchema,
 } from './project';
 
 export enum VideoRole {
@@ -140,6 +142,7 @@ const videoEditFieldsSchema = z.object({
   copyDraft: savedCopyDraftSchema.nullable().optional(),
   sessionId: z.string().uuid().optional(),
   videoTemplate: videoTemplateSchema,
+  coverStyle: coverStyleSchema,
   opening: importedVideoSchema.nullable(),
   house: importedVideoSchema.nullable(),
   materials: z.array(houseMaterialSchema).max(12).default([]),
@@ -229,6 +232,7 @@ export type VideoEditProject = z.infer<typeof videoEditSchema>;
 export type VideoEditJob = z.infer<typeof videoEditJobSchema>;
 export const EMPTY_VIDEO_EDIT: VideoEditProject = {
   videoTemplate: VideoTemplate.Classic,
+  coverStyle: CoverStyle.New,
   opening: null,
   house: null,
   materials: [],

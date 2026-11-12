@@ -5,7 +5,10 @@ import { resolve } from 'node:path';
 import { promisify } from 'node:util';
 import sharp from 'sharp';
 
-import { getPropertyOcrRuntime, OCR_VERSION } from '../server/property-ocr';
+import {
+  getPropertyOcrRuntime,
+  OCR_VERSION,
+} from '../server/copy/property-ocr';
 import { propertyOcrResultSchema } from '../src/services/definition/property-extraction';
 
 const run = promisify(execFile);

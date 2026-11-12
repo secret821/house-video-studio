@@ -62,7 +62,7 @@ services:
         - --import
         - tsx
         - -e
-        - "Promise.all([fetch('http://127.0.0.1:'+process.env.PORT+'/api/auth/session',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)throw Error('http')}),import('./server/database.ts').then(({verifyDatabase,closeDatabase})=>verifyDatabase().finally(()=>closeDatabase()))]).catch(()=>process.exit(1))"
+        - "Promise.all([fetch('http://127.0.0.1:'+process.env.PORT+'/api/auth/session',{signal:AbortSignal.timeout(4000)}).then(r=>{if(!r.ok)throw Error('http')}),import('./server/db/database.ts').then(({verifyDatabase,closeDatabase})=>verifyDatabase().finally(()=>closeDatabase()))]).catch(()=>process.exit(1))"
       interval: 30s
       timeout: 5s
       start_period: 90s

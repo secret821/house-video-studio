@@ -1,7 +1,7 @@
-/** Equal-sized cover layouts retain distinct Classic and gold Editorial lettering. */
+/** Shared editorial scene lettering and the two reference-led film cover layouts. */
 import type { CSSProperties } from 'react';
-import { AbsoluteFill } from 'remotion';
-import { VideoTemplate } from '../services/definition/project';
+import { Img, useCurrentFrame } from 'remotion';
+import { CoverStyle, VideoTemplate } from '../services/definition/project';
 
 export const EDITORIAL_TEXT: CSSProperties = {
   fontFamily: 'Noto Serif CJK SC, Songti SC, SimSun, serif',
@@ -23,141 +23,603 @@ export const EDITORIAL_TITLE: CSSProperties = {
 };
 
 const COVER_LETTERING: CSSProperties = {
-  fontFamily: 'Arial Black, PingFang SC, Microsoft YaHei, sans-serif',
+  fontFamily:
+    'Arial Black, Noto Sans CJK SC, PingFang SC, Microsoft YaHei, sans-serif',
   fontWeight: 900,
   fontStyle: 'italic',
   color: '#fff',
-  WebkitTextStroke: '12px #121212',
+  WebkitTextStroke: '10px #0b0909',
   paintOrder: 'stroke fill',
-  textShadow: '7px 10px 0 #121212',
+  textShadow: '10px 13px 0 rgba(0,0,0,.55)',
   overflowWrap: 'anywhere',
 };
 
-export function PropertyCoverCopy({
-  name,
-  price,
-  facts,
-  extra,
-  contact,
-  template = VideoTemplate.Classic,
-}: {
+interface CoverCopyProps {
   name: string;
   price: string;
   facts: string;
   extra: string;
   contact: string;
   template?: VideoTemplate;
-}) {
-  const editorial = template === VideoTemplate.Editorial;
-  const lettering: CSSProperties = editorial
-    ? { ...EDITORIAL_TEXT, color: '#ffc34d', WebkitTextStroke: '8px #21170d' }
-    : COVER_LETTERING;
+  coverStyle?: CoverStyle;
+  detailImages?: string[];
+}
+
+const COVER_GOLD: CSSProperties = {
+  ...COVER_LETTERING,
+  color: '#ffe89c',
+  WebkitTextStroke: '9px #0b0909',
+};
+
+function getCoverTitleSize(name: string) {
+  if (name.length > 16) return 96;
+  if (name.length > 8) return 112;
+  return 132;
+}
+
+function CoverDisclaimer({ bottom }: { bottom: number }) {
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        right: 42,
+        bottom,
+        fontFamily: 'Noto Sans CJK SC, PingFang SC, sans-serif',
+        fontSize: 22,
+        color: '#fff',
+        WebkitTextStroke: '2px #111',
+        paintOrder: 'stroke fill',
+        textShadow: '0 2px 4px #111',
+      }}
+    >
+      房源信息以实地核实为准
+    </div>
+  );
+}
+
+/** Talking-head cover: large outlined promise, then price to the left of the person. */
+function EditorialCoverCopy({
+  name,
+  price,
+  facts,
+  extra,
+  contact,
+}: CoverCopyProps) {
   return (
     <>
-      <AbsoluteFill
+      <div
         style={{
-          padding: editorial ? '154px 84px 0' : '240px 84px 170px',
-          alignItems: editorial ? 'flex-start' : 'center',
-          justifyContent: editorial ? 'flex-start' : 'space-between',
-          gap: editorial ? 32 : undefined,
-          textAlign: editorial ? 'left' : 'center',
+          position: 'absolute',
+          top: 310,
+          left: 36,
+          width: 500,
+          rotate: '-3deg',
         }}
       >
         <div
           style={{
-            width: '100%',
-            transform: editorial ? undefined : 'rotate(-2deg)',
+            ...COVER_LETTERING,
+            color: '#ff927a',
+            fontSize: name.length > 6 ? 82 : name.length > 4 ? 106 : 142,
+            lineHeight: 1.15,
+            letterSpacing: -2,
+            WebkitTextStroke: '13px #080808',
           }}
         >
+          {name}
+        </div>
+        {extra && (
           <div
             style={{
-              ...lettering,
+              ...COVER_GOLD,
+              marginTop: 14,
+              fontSize: 60,
+              lineHeight: 1.2,
+            }}
+          >
+            {extra}
+          </div>
+        )}
+      </div>
+      <div style={{ position: 'absolute', top: 1080, left: 0, width: 530 }}>
+        {price && (
+          <div
+            style={{
+              position: 'relative',
+              left: -14,
+              width: 'fit-content',
+              maxWidth: 530,
+              padding: '28px 36px 34px 50px',
+              borderRadius: '0 130px 130px 0',
+              background: 'linear-gradient(125deg,#b94b4b,#8d2931)',
+              boxShadow: '13px 18px 0 rgba(25,0,0,.72)',
+              rotate: '-3deg',
+            }}
+          >
+            <div
+              style={{
+                ...COVER_LETTERING,
+                fontSize: price.length > 6 ? 78 : price.length > 4 ? 104 : 142,
+                lineHeight: 1.12,
+              }}
+            >
+              {price}
+            </div>
+          </div>
+        )}
+        {facts && (
+          <div
+            style={{
+              ...COVER_LETTERING,
+              marginTop: price ? 76 : 140,
+              marginLeft: 36,
+              width: 490,
               fontSize: 44,
-              fontStyle: 'normal',
-              WebkitTextStroke: editorial ? '3px #21170d' : '6px #121212',
-              letterSpacing: 6,
-              marginBottom: 24,
+              lineHeight: 1.35,
+              WebkitTextStroke: '7px #080808',
+              rotate: '-2deg',
             }}
           >
-            {editorial ? '房源档案 / 实景记录' : '预约实地看房'}
+            {facts}
           </div>
-          <div
-            style={{
-              ...lettering,
-              fontSize: 148,
-              lineHeight: 1.25,
-              letterSpacing: 1,
-              ...(editorial && EDITORIAL_TITLE),
-              WebkitTextStroke: editorial
-                ? '8px #21170d'
-                : lettering.WebkitTextStroke,
-            }}
-          >
-            {name}
-          </div>
-        </div>
+        )}
+      </div>
+      {contact && (
         <div
           style={{
-            ...lettering,
-            width: '100%',
-            color: editorial ? '#ffc34d' : '#e87973',
-            WebkitTextStroke: editorial ? '8px #21170d' : '14px #fff',
-            textShadow: editorial
-              ? EDITORIAL_TEXT.textShadow
-              : '7px 10px 0 #121212, -3px -3px 0 #121212',
-            fontSize: 190,
-            lineHeight: 1.1,
-            transform: editorial ? undefined : 'rotate(-3deg)',
-          }}
-        >
-          <div style={{ fontSize: 62, marginBottom: 16 }}>总价</div>
-          {price}
-        </div>
-        <div
-          style={{
-            ...lettering,
-            width: '100%',
-            fontSize: 64,
-            lineHeight: 1.55,
-            color: editorial ? '#fff0d2' : lettering.color,
-            WebkitTextStroke: editorial ? '4px #21170d' : '9px #121212',
-            transform: editorial ? undefined : 'rotate(-1deg)',
-          }}
-        >
-          {facts}
-          <div style={{ fontSize: 86, marginTop: 26 }}>{extra}</div>
-        </div>
-        <div
-          style={{
-            ...lettering,
-            width: '100%',
-            fontSize: 42,
-            color: editorial ? '#fff0d2' : lettering.color,
-            lineHeight: 1.5,
+            ...COVER_LETTERING,
+            position: 'absolute',
+            bottom: 104,
+            left: 36,
+            width: 500,
+            fontSize: 46,
             fontStyle: 'normal',
-            WebkitTextStroke: editorial ? '3px #21170d' : '6px #121212',
+            WebkitTextStroke: '5px #080808',
           }}
         >
           {contact}
         </div>
-      </AbsoluteFill>
+      )}
+      <CoverDisclaimer bottom={24} />
+    </>
+  );
+}
+
+/** Room cover: centered facts and price leave the footage visible below. */
+function ClassicCoverCopy({
+  name,
+  price,
+  facts,
+  extra,
+  contact,
+}: CoverCopyProps) {
+  return (
+    <>
       <div
         style={{
-          ...lettering,
           position: 'absolute',
-          left: 84,
-          right: 84,
-          bottom: 80,
-          textAlign: editorial ? 'left' : 'center',
-          fontSize: 25,
-          fontWeight: 600,
-          fontStyle: 'normal',
-          WebkitTextStroke: '3px #121212',
-          textShadow: '1px 2px 3px #121212',
+          ...COVER_LETTERING,
+          top: 430,
+          left: 48,
+          right: 48,
+          fontSize: getCoverTitleSize(name),
+          lineHeight: 1.16,
+          textAlign: 'center',
+          WebkitTextStroke: '15px #080808',
+          rotate: '-2deg',
         }}
       >
-        房源信息与附属空间情况，以实地核实为准
+        {name}
       </div>
+      {facts && (
+        <div
+          style={{
+            ...COVER_GOLD,
+            position: 'absolute',
+            top: 770,
+            left: 66,
+            right: 66,
+            fontSize: 60,
+            lineHeight: 1.2,
+            textAlign: 'center',
+            rotate: '-3deg',
+          }}
+        >
+          {facts}
+        </div>
+      )}
+      {(price || extra) && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 1030,
+            left: 48,
+            right: 48,
+            textAlign: 'center',
+            rotate: '-3deg',
+          }}
+        >
+          {price && (
+            <div
+              style={{
+                ...COVER_LETTERING,
+                color: '#ef8b7c',
+                fontSize: 166,
+                lineHeight: 1.12,
+              }}
+            >
+              {price}
+            </div>
+          )}
+          {extra && (
+            <div
+              style={{
+                ...COVER_GOLD,
+                marginTop: price ? 28 : 0,
+                fontSize: 52,
+                lineHeight: 1.2,
+              }}
+            >
+              {extra}
+            </div>
+          )}
+        </div>
+      )}
+      {contact && (
+        <div
+          style={{
+            ...COVER_LETTERING,
+            position: 'absolute',
+            right: 58,
+            bottom: 310,
+            left: 58,
+            fontSize: 38,
+            lineHeight: 1.2,
+            textAlign: 'center',
+            WebkitTextStroke: '5px #080808',
+          }}
+        >
+          {contact}
+        </div>
+      )}
+      <CoverDisclaimer bottom={260} />
     </>
+  );
+}
+
+/** New layouts use the same editable copy as the original covers. */
+function NewEditorialCoverCopy({
+  name,
+  price,
+  facts,
+  extra,
+  contact,
+}: CoverCopyProps) {
+  const detailLength = [facts, price, extra]
+    .filter(Boolean)
+    .join(' ｜ ').length;
+  return (
+    <>
+      <div
+        style={{
+          position: 'absolute',
+          inset: 0,
+          left: '50%',
+          background:
+            'linear-gradient(135deg,rgba(128,0,0,.9),rgba(173,20,19,.82))',
+        }}
+      />
+      <div
+        style={{
+          position: 'absolute',
+          top: 640,
+          bottom: 410,
+          left: '51%',
+          right: 24,
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'center',
+          color: '#fff',
+        }}
+      >
+        <div
+          style={{
+            color: '#ffe2a3',
+            fontSize: name.length > 16 ? 68 : name.length > 8 ? 96 : 124,
+            fontWeight: 900,
+            lineHeight: 1.15,
+            textAlign: 'center',
+            overflowWrap: 'anywhere',
+            textShadow: '0 6px 12px rgba(0,0,0,.35)',
+          }}
+        >
+          {name}
+        </div>
+        {(facts || price || extra) && (
+          <div
+            style={{
+              marginTop: 32,
+              fontSize: detailLength > 40 ? 39 : detailLength > 20 ? 48 : 58,
+              fontWeight: 700,
+              textAlign: 'center',
+              lineHeight: 1.35,
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {[facts, price, extra].filter(Boolean).join(' ｜ ')}
+          </div>
+        )}
+      </div>
+      {contact && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 170,
+            left: '51%',
+            right: 24,
+            color: '#fff',
+            fontSize: 46,
+            fontWeight: 700,
+            textAlign: 'center',
+            lineHeight: 1.3,
+          }}
+        >
+          {contact}
+        </div>
+      )}
+      <CoverDisclaimer bottom={38} />
+    </>
+  );
+}
+
+/** Keep the badge readable by selecting area and layout before less distinctive facts. */
+function splitCoverFacts(facts: string, extra: string) {
+  const parts = [
+    ...new Set(
+      [facts, extra]
+        .flatMap((value) => value.split(/[/|｜、，,；;]+/))
+        .map((value) => value.trim())
+        .filter(Boolean),
+    ),
+  ];
+  const priority = [
+    parts.find((value) => /\d+(?:\.\d+)?\s*(?:㎡|m²)/i.test(value)),
+    parts.find((value) => /\d+\s*(?:房|室)/.test(value)),
+  ].filter((value): value is string => Boolean(value));
+  const highlights = [...new Set([...priority, ...parts])].slice(0, 2);
+  return {
+    highlights,
+    remaining: parts.filter((value) => !highlights.includes(value)),
+  };
+}
+
+/** Stack two cards behind the title; the title and detail badge share one centered block. */
+function NewClassicCoverCopy({
+  name,
+  price,
+  facts,
+  extra,
+  contact,
+  detailImages,
+}: CoverCopyProps) {
+  const frame = useCurrentFrame();
+  const { highlights, remaining } = splitCoverFacts(facts, extra);
+  const remainingText = remaining.join(' ｜ ');
+  return (
+    <>
+      <div
+        style={{
+          position: 'absolute',
+          top: 250,
+          left: 70,
+          right: 70,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <div
+          style={{
+            position: 'relative',
+            width: '100%',
+            minHeight: 310,
+          }}
+        >
+          <div
+            style={{
+              position: 'absolute',
+              inset: '4px 12px 14px -12px',
+              transform: 'rotate(-3deg)',
+              borderRadius: 26,
+              background: '#9d1a19',
+              boxShadow: '0 16px 24px rgba(30,0,0,.3)',
+            }}
+          />
+          <div
+            style={{
+              position: 'absolute',
+              inset: '12px -12px 4px 12px',
+              transform: 'rotate(2.5deg)',
+              borderRadius: 26,
+              background: '#b9332d',
+            }}
+          />
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 1,
+              minHeight: 310,
+              padding: '34px 42px',
+              borderRadius: 26,
+              border: '3px solid rgba(255,238,220,.8)',
+              background:
+                'linear-gradient(140deg,rgba(116,12,13,.94),rgba(172,34,27,.9))',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              boxSizing: 'border-box',
+            }}
+          >
+            <div
+              style={{
+                color: '#fff',
+                fontSize: name.length > 16 ? 65 : name.length > 8 ? 94 : 136,
+                fontWeight: 900,
+                lineHeight: 1.12,
+                textAlign: 'center',
+                overflowWrap: 'anywhere',
+                textShadow: '0 5px 8px rgba(0,0,0,.35)',
+              }}
+            >
+              {name}
+            </div>
+          </div>
+        </div>
+        {highlights.length > 0 && (
+          <div
+            style={{
+              position: 'relative',
+              zIndex: 2,
+              width: '82%',
+              minHeight: 120,
+              marginTop: -30,
+              padding: '20px 28px',
+              borderRadius: 72,
+              backgroundImage:
+                'linear-gradient(110deg,#e9a60e,#ffdd40 22%,#fff6b1 35%,#f8c125 52%,#fff4a1 66%,#e5a10b)',
+              backgroundSize: '220% 100%',
+              backgroundPosition: `${Math.min(100, (frame / 45) * 100)}% 0`,
+              boxShadow:
+                '0 10px 20px rgba(95,44,0,.4),inset 0 2px 4px rgba(255,255,255,.75)',
+              color: '#790d08',
+              fontSize: highlights.join(' ｜ ').length > 14 ? 48 : 62,
+              fontWeight: 900,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              textAlign: 'center',
+              lineHeight: 1.2,
+              overflowWrap: 'anywhere',
+              boxSizing: 'border-box',
+            }}
+          >
+            <span>{highlights.join(' ｜ ')}</span>
+          </div>
+        )}
+      </div>
+      {price && (
+        <div
+          style={{
+            ...COVER_LETTERING,
+            position: 'absolute',
+            top: detailImages?.length ? 835 : 1020,
+            left: 85,
+            right: 85,
+            color: '#ef8b7c',
+            fontSize: price.length > 10 ? 100 : 150,
+            textAlign: 'center',
+            lineHeight: 1.1,
+            WebkitTextStroke: '11px #080808',
+          }}
+        >
+          {price}
+        </div>
+      )}
+      {remainingText && (
+        <div
+          style={{
+            ...COVER_GOLD,
+            position: 'absolute',
+            top: detailImages?.length ? 1030 : 1235,
+            left: 80,
+            right: 80,
+            fontSize:
+              remainingText.length > 55
+                ? 32
+                : remainingText.length > 30
+                  ? 38
+                  : 44,
+            lineHeight: 1.35,
+            textAlign: 'center',
+            WebkitTextStroke: '5px #080808',
+          }}
+        >
+          {remainingText}
+        </div>
+      )}
+      {detailImages && detailImages.length > 0 && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 285,
+            left: 60,
+            right: 60,
+            height: 420,
+            display: 'flex',
+            gap: 22,
+            alignItems: 'center',
+          }}
+        >
+          {detailImages.slice(0, 2).map((src, index) => (
+            <div
+              key={`${src}-${index}`}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                height: 360,
+                border: '14px solid #fff',
+                borderRadius: 14,
+                background: '#fff',
+                boxShadow: '0 12px 22px rgba(0,0,0,.4)',
+                rotate: index === 0 ? '-5deg' : '5deg',
+                overflow: 'hidden',
+              }}
+            >
+              <Img
+                src={src}
+                alt=""
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </div>
+          ))}
+        </div>
+      )}
+      {contact && (
+        <div
+          style={{
+            position: 'absolute',
+            bottom: 155,
+            left: 130,
+            right: 130,
+            padding: '18px 26px',
+            borderRadius: 24,
+            background: 'rgba(155,16,18,.9)',
+            color: '#fff',
+            fontSize: 44,
+            fontWeight: 700,
+            textAlign: 'center',
+            lineHeight: 1.25,
+          }}
+        >
+          {contact}
+        </div>
+      )}
+      <CoverDisclaimer bottom={38} />
+    </>
+  );
+}
+
+export function PropertyCoverCopy(props: CoverCopyProps) {
+  if (props.coverStyle !== CoverStyle.Original)
+    return props.template === VideoTemplate.Editorial ? (
+      <NewEditorialCoverCopy {...props} />
+    ) : (
+      <NewClassicCoverCopy {...props} />
+    );
+  return props.template === VideoTemplate.Editorial ? (
+    <EditorialCoverCopy {...props} />
+  ) : (
+    <ClassicCoverCopy {...props} />
   );
 }

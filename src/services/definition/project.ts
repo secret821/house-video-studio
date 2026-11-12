@@ -34,16 +34,22 @@ export enum VideoTemplate {
   Classic = 'classic',
   Editorial = 'editorial',
 }
+/** Cover artwork changes independently of the film template and its timing. */
+export enum CoverStyle {
+  New = 'new',
+  Original = 'original',
+}
+export const coverStyleSchema = z.enum(CoverStyle).default(CoverStyle.New);
 export const VIDEO_TEMPLATE_MAP = {
   [VideoTemplate.Classic]: {
     name: '经典实拍',
-    description: '白色大字 · 原有字幕样式',
+    description: '房屋封面 · 黑边大字与居中总价',
     coverDescription:
       '默认封面底图：首份房屋素材（视频取首帧，照片直接使用），可手动更换。',
   },
   [VideoTemplate.Editorial]: {
     name: '杂志留白',
-    description: '橙金衬线大字 · 上方留白',
+    description: '人物封面 · 黑边大字与红色价格条',
     coverDescription: '默认封面底图：口播开场视频的第一帧，可手动更换。',
   },
 };

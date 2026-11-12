@@ -4,9 +4,9 @@
 
 实拍原声字幕使用本地免费引擎：默认SenseVoice INT8＋Silero VAD；新腾讯云可显式配置`STUDIO_ASR_ENGINE=nano`使用Fun-ASR-Nano F16/Q8＋FSMN VAD，识别后顺序运行SenseVoice INT8 CTC强制对齐，仅提供时间、不改Nano文字。Nano目录默认`.runtime/asr-nano`，限新机3CPU/2560MiB独立整服务验收，不能用于旧768MiB服务或沿用旧模型长片验收结论。管理员执行 `pnpm setup:asr` 校验与离线自检后启用；模型在 `.runtime/asr` 或 `STUDIO_ASR_DIR`。按用户最新要求，默认不识别、不添加原声字幕；用户逐份点击“生成原声字幕”，结果仅进入独立可编辑文案，确认“添加到视频”后才写入speechCaptions并开启原声字幕显示。不在上传或生成成片时自动识别，未识别不得阻止导出；不覆盖房源文案、镜头字幕或配音，不改变原声。再次编辑/重新识别只改变待确认文案，明确确认后才替换已添加的原声字幕；迟到结果不能写回已移除/替换的原片。任务/缓存/音轨须按workspace隔离，复用媒体单槽及取消保护。预览与两种MP4路径共用帧映射，静音封面不显示讲话字幕。旧SenseVoice部署在Linux启用前须在原1CPU/768MiB整服务限制下完成长短片、连续讲话、取消/隔离与两条实际MP4验收，记录内存回收压力、OOM与重启，不能据短样片保证长片上限；未验收不得上线。
 
-独立 Next.js App Router＋React＋TypeScript 房源照片视频工具，遵循 `plan.md` 的已授权范围。修改前阅读相关模块及相邻文件。仅使用公共依赖；HTTP 使用业务 API 中的 fetch 和 Zod 契约；异步使用 Promise 链。Next 薄路由入口放在 `src/app`，页面业务逻辑放在 `src/features/studio`，服务契约放在 `src/services/definition`。Tailwind 超过6类用 clsx 分组，禁止 clsx 三目。视频画布内联样式属于媒体布局例外，所有视频动画必须由帧数驱动。完成前执行 lint、format:check、typecheck、build、test 和实际浏览器/MP4 验证。不得修改相邻科研工作台仓库。只在用户明确要求时发布到公网。
+独立 Next.js App Router＋React＋TypeScript 房源照片视频工具，遵循 `plan.md` 的已授权范围。修改前阅读相关模块及相邻文件。仅使用公共依赖；HTTP 统一从 `src/share/request.ts` 发起，业务 API 提供路径与 Zod 契约，`/api` 使用统一 envelope 与 snake_case 线上字段；服务端状态用 TanStack Query，草稿队列及媒体任务保留专用 Promise 链。Next 薄路由入口放在 `src/app`，页面业务逻辑放在 `src/features/studio` 的 auth/draft/photo/video/media/jobs/shell 目录，通用 UI 放 `src/share/ui`，服务契约放在 `src/services/definition`，测试集中 `tests/`。Tailwind 超过6类用 clsx 分组，禁止 clsx 三目。视频画布内联样式属于媒体布局例外，所有视频动画必须由帧数驱动。完成前执行 lint、format:check、typecheck、build、test 和实际浏览器/MP4 验证。不得修改相邻科研工作台仓库。只在用户明确要求时发布到公网。
 
-存储保护沿用 `server/storage-capacity.ts`：默认每账号5GiB、磁盘预留1GiB，可配置 `STUDIO_WORKSPACE_LIMIT_MIB` / `STUDIO_MIN_DISK_FREE_MIB`；排队与运行预算直到任务/清理结束才释放。外部维护脚本只能删除已显式标记完成且至少7天未改动的独立验收目录，不得按mtime扫描删除业务data、模型、认证配置或发布依赖。操作见 `deploy/storage-maintenance.md`。
+存储保护沿用 `server/storage/storage-capacity.ts`：默认每账号5GiB、磁盘预留1GiB，可配置 `STUDIO_WORKSPACE_LIMIT_MIB` / `STUDIO_MIN_DISK_FREE_MIB`；排队与运行预算直到任务/清理结束才释放。外部维护脚本只能删除已显式标记完成且至少7天未改动的独立验收目录，不得按mtime扫描删除业务data、模型、认证配置或发布依赖。操作见 `deploy/storage-maintenance.md`。
 
 ## 房产文案参考
 
@@ -22,11 +22,11 @@
 
 视频上传仅收原片与受限元数据校验，不在上传时转码、规范音量或抽帧，也不等待重型渲染槽。实拍和照片开场在生成成片时按账号准备原片，单份准备15分钟、上传15分钟、单视频1GiB；客户端状态不能跳过原片路径校验。
 
-视频模板由videoTemplate（classic/editorial）驱动，旧草稿缺失时保持classic。顶部“杂志留白”在前、“经典实拍”在后，附同一封面组件生成的参考图，可放大；第一套以虚构人物口播首帧作示意，第二套以房屋作示意，不能都用房屋底图。经典默认首份房屋素材、保留原描边字；新建杂志留白项目缺省取口播开场第0帧；已有项目切换模板时保留素材、房源文字、原声字幕/待确认稿、配乐和剪辑时间；模板表现配置同步切换，经典封面使用首份房屋素材，杂志封面使用口播开场。不要把封面来源当房源资料冻结在上一模板。按用户2026-11-03最新要求，两套模板保持相近的大字字号；第一套杂志留白改用橙金色正体衬线字、深色描边与下划线，第二套经典实拍保留白色斜体大字和珊瑚红总价，杂志封面文字左对齐且集中偏上、下方留人物，取消自动缩小字号；杂志片内装饰标题同步橙金衬线风格，原声字幕保持经典可读样式，不使用文字色块、顶部边框或蒙层。均可手动更改封面来源，冻结静音，预览、封面及两种MP4路径共用模板，原声与字幕时间不变。照片模式同步字体样式，片尾保留克制版式。成片按模板身份隔离缓存，切回未改内容的旧模板可复用；上一版仍可下载且标明实际模板，预览始终使用当前配置，旧成片单独播放下载且不替代实时预览，不新建历史草稿。发布须重建两套视频包。更多菜单直接展示服务端当前会话username，每次打开重新核对，退出沿用明确确认及会话账号一致性校验。
+视频模板由videoTemplate（classic/editorial）驱动，旧草稿缺失时保持classic。实拍封面另由coverStyle（new/original）驱动，新建及缺字段旧草稿默认new，原版可切回；模板区保持两张卡片，点击“切换封面样式”在弹窗中勾选新版/原版并放大参考图；选择与卡片参考图、实时预览及导出同步，切换保留素材、文字与时序。以下2026-11-04及2026-11-07封面位置要求适用于original版；new版人物封面保留顶部空间、右侧红色信息区，房屋封面使用避开水印的叠层红色标题卡，标题与渐变详情卡内的两项重点文字均上下居中，其余要点放在艺术描边总价下方，后续房屋素材可用于双照片卡片。顶部“杂志留白”在前、“经典实拍”在后，附对应封面参考图，可放大；第一套以虚构人物口播首帧作示意，第二套以房屋作示意，不能都用房屋底图。经典默认首份房屋素材、保留原描边字；新建杂志留白项目缺省取口播开场第0帧；已有项目切换模板时保留素材、房源文字、原声字幕/待确认稿、配乐和剪辑时间；模板表现配置同步切换，经典封面使用首份房屋素材，杂志封面使用口播开场。不要把封面来源当房源资料冻结在上一模板。当前封面按2026-11-04用户参考图：两套模板均用白字黑描边标题；杂志留白的人物封面按2026-11-07要求回退至11月6日调整前的标题、价格条、联系文字与水印位置，浅金副标题保持原样；原版经典实拍的白字标题在原有高度适当加粗加大，同时避免缩略图裁切截字；中部浅金色要点保留；经典实拍取消右下价格卡，总价以较亮珊瑚红描边字在画面中部居中显示，附加特点位于其下，联系文字保留在底部。封面只用当前可编辑字段，不写死参考图文案及价格；片内杂志装饰标题仍用橙金衬线风格，原声字幕保持经典可读样式。均可手动更改封面来源，冻结静音，预览、封面及两种MP4路径共用模板，原声与字幕时间不变。照片模式同步字体样式，片尾保留克制版式。成片按模板身份隔离缓存，切回未改内容的旧模板可复用；上一版仍可下载且标明实际模板，预览始终使用当前配置，旧成片单独播放下载且不替代实时预览，不新建历史草稿。发布须重建两套视频包。更多菜单直接展示服务端当前会话username，每次打开重新核对，退出沿用明确确认及会话账号一致性校验。
 
 ## 项目规范（Next.js 迁移后生效）
 
-页面UI统一从`src/features/studio/common`使用封装控件，禁止业务页面直接导入antd（由ESLint检查）；StudioProvider与common内部为库基础设施例外。按钮变体、输入、选择、表单、弹窗、上传等共享适配和common/controls.css；页面仅编排布局，不能恢复逐页按钮外观修补。保留原生媒体与排序交互，来源和适配约束见common/README.md。
+页面UI统一从`src/share/ui`使用封装控件，禁止业务页面直接导入antd（由ESLint检查）；StudioProvider与share/ui内部为库基础设施例外。按钮变体、输入、选择、表单、弹窗、上传等共享适配和`src/share/ui/controls.css`；页面仅编排布局，不能恢复逐页按钮外观修补。保留原生媒体与排序交互，来源和适配约束见`src/share/ui/README.md`。
 
 Docker路径使用根目录Dockerfile/compose.yaml与deploy/docker说明；仅Linux x86_64，保持host网络下的准确loopback监听。完整源码上下文排除data、.env、凭据、会话、本机node_modules与.runtime；冻结正式版用Dockerfile.prebuilt和配套白名单，只收已核验公共运行时，ASR显式启用后在容器内重装Linux依赖并自检。两种路径均排除Mac的._附加文件，构建时校验两套模板指纹。认证只读挂载，sessions和临时业务data分开，单实例，不挂Docker socket、不放开任意Host/Origin。容器限额仅用于新服务器，不能据此修改旧服务或声称已通过真实长片资源验收。
 
@@ -36,8 +36,9 @@ Docker路径使用根目录Dockerfile/compose.yaml与deploy/docker说明；仅Li
 
 - 新增、移动文件先读 [目录规范](rules/project-structure-guidelines.md)。禁止恢复 `src/pages` 或添加无实际复用的共享层。
 - 组件、状态、样式改动先读 [组件规范](rules/component-rules-spec.md)、[设计系统](rules/design-system.md) 和 [Tailwind 规范](rules/tailwind-usage.md)。
-- API、契约、安全或云调用改动先读 [数据源规范](rules/api-data-source.md)。本项目保持 fetch＋Zod，不引入参考项目私有请求库。
+- API、契约、安全或云调用改动先读 [数据源规范](rules/api-data-source.md)。本项目保持公共 fetch＋Zod 请求层及 TanStack Query，不引入参考项目私有请求库。
 - 视频、构建、运行与交付先读 [媒体与验证规范](rules/video-and-verification.md)。Express API 和 Next 页面共用本机服务，生产不能直接使用 next start。
+- 编辑器交互、素材排序、帧时间、模板或媒体工具改动先读 [编辑器与媒体架构](rules/editor-and-media-architecture.md)。
 - 不覆盖用户已有改动，不提交密钥，不修改参考仓库。新增代码严格遵守规则，旧实现只在本次触达范围治理，不批量重命名。
 - 宝塔部署仍保持loopback监听；PUBLIC_ORIGIN只能显式加入准确来源，不能删除或改写Origin绕过校验。公网必须配置STUDIO_DB_CONFIG并由Express会话保护页面/API/media/exports；Nginx须把Host固定为公网Host，不能转发客户端任意Host或127.0.0.1，否则会进入仅供渲染的media/demo读取例外。MySQL私有连接配置由管理员持有、应用用户不可写；7天登录摘要独立存于STUDIO_SESSION_STORE私有目录（0700/0600），与2小时临时业务文件分开，退出先可靠撤销再返回成功。新MySQL部署/回滚见deploy/mysql.md，旧宝塔发布记录见deploy/README.md；原片按账号保留，任务与成片按临时规则清理，不复用ImageForge数据库。
 

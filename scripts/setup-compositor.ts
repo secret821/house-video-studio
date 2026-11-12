@@ -21,7 +21,7 @@ import {
   COMPOSITOR_VERSION,
   compositorDirectory,
   fileChecksum,
-} from '../server/native-compositor-runtime';
+} from '../server/media/native-compositor-runtime';
 const directory = compositorDirectory(),
   platform = `${process.platform}-${process.arch}`,
   asset = COMPOSITOR_ASSETS[platform],

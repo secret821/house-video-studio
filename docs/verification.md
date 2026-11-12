@@ -1214,6 +1214,16 @@ Remotion Chromium 实际渲染两版封面和实拍片内帧，检查换行、�
 
 用示意房源字段渲染1080×1920封面 JPG，并导出同组件封面段 `/tmp/house-cover-new-classic-final.mp4`：H.264、1080×1920、1.2秒。浏览器打开新版经典参考图确认叠层、详情和价格排版；本地草稿为用户现有数据，浏览器只查看弹窗，没有切换或保存。`pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`、`pnpm build:video`、`pnpm test` 通过，187/187测试通过。未用用户原片导出完整成片，未验收原声及原生合成路径；未发布公网。
 
+## 新版封面透明度与人物底图（2026-11-12）
+
+新版经典房屋封面的三层标题卡改为深红色半透明，房屋画面可透出；新版杂志人物封面移除右侧整块红色蒙层，文字直接叠在原片上，用阴影保持可读。人物封面详情以完整字段换行，避免价格单位单字断开。两张 `template-*-new.jpg` 参考图均从 `FreeVideoCover` 重渲染；人物示意使用项目已有虚构人物原图生成的无叠字、人物靠左底图 `public/demo/presenter-new-background.png`，只供模板参考，实际封面仍取用户选择的原片或图片。模板卡片文案改为适用于两种封面版本的描述，原版渲染逻辑未改。
+
+本地示意素材导出新版经典与杂志封面段，均为H.264、1080×1920、1.2秒。浏览器核对经典封面弹窗缩略图和新版人物参考图；未改动当前账号草稿。`pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`、`pnpm build:video`、`pnpm test` 均通过，187/187测试通过。未以用户原片验证完整成片与原声路径，未发布公网。
+
+## 新版详情卡透明度与示例图同步（2026-11-12）
+
+新版经典封面的金色详情卡与深红标题卡使用相同的渐变透明度范围（0.68到0.62），保留帧驱动流光、文字居中和可读阴影。`template-classic-new.jpg` 与 `template-editorial-new.jpg` 均由当前 `FreeVideoCover` 和示意素材重渲染；模板卡及样式弹窗共用版本化示例图URL，避免浏览器沿用先前带右侧红色蒙层的旧图片。原版示例图及原版渲染逻辑未改。实际预览与导出仍通过同一封面组件取得当前素材和房源字段。
+
 同日按用户截图把原版人物封面的附加特点由84px缩至60px、价格下房源要点由72px缩至44px；标题、价格及半屏宽度未变。使用字段上限60字房源要点、23字附加特点与8字价格渲染封面，底部要点不再与联系文字重叠或被画布裁切；Chrome 本地真实草稿预览中的两处文字也已核对。另导出封面36帧H.264短MP4；`pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`、`pnpm build:video`、`pnpm test` 与 `git diff --check` 通过，187项测试通过。未重新导出完整用户成片，未发布公网。
 
 同日按经典实拍封面截图，把原版房源要点由82px缩至60px；主标题、总价和附加特点不变。使用当前草稿同类字段渲染实际封面静帧，房源要点与下方总价之间留有间距；模板卡的原版经典参考JPG由同一组件重渲染，Chrome 本地草稿实时预览已核对。导出封面36帧H.264短MP4；`pnpm lint`、`pnpm format:check`、`pnpm typecheck`、`pnpm build`、`pnpm build:video`、`pnpm test` 与 `git diff --check` 通过，187项测试通过。未重新导出完整用户成片，未发布公网。

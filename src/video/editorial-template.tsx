@@ -295,20 +295,10 @@ function NewEditorialCoverCopy({
   extra,
   contact,
 }: CoverCopyProps) {
-  const detailLength = [facts, price, extra]
-    .filter(Boolean)
-    .join(' ｜ ').length;
+  const detailFields = [facts, price, extra].filter(Boolean);
+  const detailLength = detailFields.join(' ｜ ').length;
   return (
     <>
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          left: '50%',
-          background:
-            'linear-gradient(135deg,rgba(128,0,0,.9),rgba(173,20,19,.82))',
-        }}
-      />
       <div
         style={{
           position: 'absolute',
@@ -330,7 +320,7 @@ function NewEditorialCoverCopy({
             lineHeight: 1.15,
             textAlign: 'center',
             overflowWrap: 'anywhere',
-            textShadow: '0 6px 12px rgba(0,0,0,.35)',
+            textShadow: '0 4px 10px rgba(0,0,0,.85)',
           }}
         >
           {name}
@@ -344,9 +334,22 @@ function NewEditorialCoverCopy({
               textAlign: 'center',
               lineHeight: 1.35,
               overflowWrap: 'anywhere',
+              textShadow: '0 3px 8px rgba(0,0,0,.9)',
             }}
           >
-            {[facts, price, extra].filter(Boolean).join(' ｜ ')}
+            {detailFields.map((value, index) => (
+              <span
+                key={`${index}-${value}`}
+                style={{
+                  display: 'inline-block',
+                  maxWidth: '100%',
+                  margin: '0 6px',
+                  overflowWrap: 'anywhere',
+                }}
+              >
+                {value}
+              </span>
+            ))}
           </div>
         )}
       </div>
@@ -362,6 +365,7 @@ function NewEditorialCoverCopy({
             fontWeight: 700,
             textAlign: 'center',
             lineHeight: 1.3,
+            textShadow: '0 3px 8px rgba(0,0,0,.9)',
           }}
         >
           {contact}
@@ -432,7 +436,7 @@ function NewClassicCoverCopy({
               inset: '4px 12px 14px -12px',
               transform: 'rotate(-3deg)',
               borderRadius: 26,
-              background: '#9d1a19',
+              background: 'rgba(80,7,12,.28)',
               boxShadow: '0 16px 24px rgba(30,0,0,.3)',
             }}
           />
@@ -442,7 +446,7 @@ function NewClassicCoverCopy({
               inset: '12px -12px 4px 12px',
               transform: 'rotate(2.5deg)',
               borderRadius: 26,
-              background: '#b9332d',
+              background: 'rgba(116,16,19,.24)',
             }}
           />
           <div
@@ -454,7 +458,7 @@ function NewClassicCoverCopy({
               borderRadius: 26,
               border: '3px solid rgba(255,238,220,.8)',
               background:
-                'linear-gradient(140deg,rgba(116,12,13,.94),rgba(172,34,27,.9))',
+                'linear-gradient(140deg,rgba(67,5,11,.68),rgba(98,10,16,.62))',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -487,11 +491,11 @@ function NewClassicCoverCopy({
               padding: '20px 28px',
               borderRadius: 72,
               backgroundImage:
-                'linear-gradient(110deg,#e9a60e,#ffdd40 22%,#fff6b1 35%,#f8c125 52%,#fff4a1 66%,#e5a10b)',
+                'linear-gradient(110deg,rgba(233,166,14,.68),rgba(255,221,64,.67) 22%,rgba(255,246,177,.66) 35%,rgba(248,193,37,.65) 52%,rgba(255,244,161,.64) 66%,rgba(229,161,11,.62))',
               backgroundSize: '220% 100%',
               backgroundPosition: `${Math.min(100, (frame / 45) * 100)}% 0`,
               boxShadow:
-                '0 10px 20px rgba(95,44,0,.4),inset 0 2px 4px rgba(255,255,255,.75)',
+                '0 10px 20px rgba(95,44,0,.4),inset 0 2px 4px rgba(255,255,255,.35)',
               color: '#790d08',
               fontSize: highlights.join(' ｜ ').length > 14 ? 48 : 62,
               fontWeight: 900,

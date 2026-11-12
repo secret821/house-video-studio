@@ -43,13 +43,13 @@ export const coverStyleSchema = z.enum(CoverStyle).default(CoverStyle.New);
 export const VIDEO_TEMPLATE_MAP = {
   [VideoTemplate.Classic]: {
     name: '经典实拍',
-    description: '房屋封面 · 黑边大字与居中总价',
+    description: '房屋封面 · 标题与居中总价',
     coverDescription:
       '默认封面底图：首份房屋素材（视频取首帧，照片直接使用），可手动更换。',
   },
   [VideoTemplate.Editorial]: {
     name: '杂志留白',
-    description: '人物封面 · 黑边大字与红色价格条',
+    description: '人物封面 · 标题与房源信息',
     coverDescription: '默认封面底图：口播开场视频的第一帧，可手动更换。',
   },
 };

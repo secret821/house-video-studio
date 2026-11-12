@@ -18,6 +18,9 @@ interface Props {
 }
 
 const TEMPLATES = [VideoTemplate.Editorial, VideoTemplate.Classic];
+const NEW_COVER_PREVIEW_REVISION = '20261112-gold-alpha';
+const newCoverPreview = (template: VideoTemplate) =>
+  `/demo/template-${template}-new.jpg?v=${NEW_COVER_PREVIEW_REVISION}`;
 
 /** Keep preview independent from selection, including while a render disables template changes. */
 export function VideoTemplatePicker({
@@ -59,7 +62,7 @@ export function VideoTemplatePicker({
           const option = VIDEO_TEMPLATE_MAP[template];
           const preview =
             coverStyle === CoverStyle.New
-              ? `/demo/template-${template}-new.jpg`
+              ? newCoverPreview(template)
               : `/demo/template-${template}.jpg`;
           return (
             <div
@@ -150,7 +153,7 @@ export function VideoTemplatePicker({
                 <Image
                   src={
                     style === CoverStyle.New
-                      ? `/demo/template-${value}-new.jpg`
+                      ? newCoverPreview(value)
                       : `/demo/template-${value}.jpg`
                   }
                   alt={`${VIDEO_TEMPLATE_MAP[value].name}${style === CoverStyle.New ? '新版' : '原版'}封面参考图`}

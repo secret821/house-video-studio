@@ -45,7 +45,7 @@ import { StudioSectionHeading } from '../shell/studio-section-heading';
 import { VideoEditPreview } from './video-edit-preview';
 import { VideoEditSettings } from './video-edit-settings';
 import { SpeechSubtitlesPanel } from './speech-subtitles-panel';
-import { VideoTemplatePicker } from './video-template-picker';
+import { VideoCoverPicker } from './video-template-picker';
 
 const FIELDS = [
   { key: 'name', label: '小区 / 片名', max: 32 },
@@ -99,13 +99,15 @@ export function VideoEditPage() {
         )}
       >
         <h1 className="sr-only">房源视频制作</h1>
-        <VideoTemplatePicker
-          value={project.videoTemplate}
-          coverStyle={project.coverStyle}
-          onCoverStyleChange={(coverStyle) => editor.patch({ coverStyle })}
+        <VideoCoverPicker
+          template={project.coverTemplate}
+          style={project.coverStyle}
+          source={project.coverSource}
           disabled={busy}
-          onChange={editor.selectTemplate}
-          showCoverSource
+          onStyleChange={(coverTemplate, coverStyle) =>
+            editor.patch({ coverTemplate, coverStyle })
+          }
+          onSourceChange={(coverSource) => editor.patch({ coverSource })}
         />
         <StudioNavigation onPreview={() => setPreviewOpen(true)} />
         {(editor.work || notice.text) && (

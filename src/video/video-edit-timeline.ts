@@ -84,7 +84,7 @@ export function createMaterialShots(
       source.kind === HouseMediaKind.Video
         ? source.video.duration
         : Math.min(5, source.duration),
-    title: source.kind === HouseMediaKind.Video ? '房屋实拍' : '房源照片',
+    title: source.kind === HouseMediaKind.Video ? '' : '房源照片',
     text: '',
   }));
 }

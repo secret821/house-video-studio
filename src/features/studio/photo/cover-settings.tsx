@@ -1,10 +1,7 @@
 /** Cover sources share the existing property lettering, local image upload and saved-project timing. */
-import { Select, InputNumber } from '../../../share/ui';
+import { Button, InputNumber } from '../../../share/ui';
 
-import {
-  COVER_SOURCE_MAP,
-  CoverSource,
-} from '@/services/definition/video-edit';
+import { CoverSource } from '@/services/definition/video-edit';
 
 import { FileUpload } from '../media/file-upload';
 import type { useVideoEdit } from '../video/use-video-edit';
@@ -18,56 +15,41 @@ export function CoverSettings({
   const { project, busy } = editor;
   return (
     <section className="space-y-6 pt-4" aria-label="封面底图与展示时长">
-      <div className="island-select">
-        <span
-          className="mb-2 block text-body font-medium"
-          id="cover-source-label"
-        >
-          封面底图来源
-        </span>
-        <Select
-          fieldNames={{ value: 'key', label: 'label' }}
-          aria-labelledby="cover-source-label"
-          aria-label="封面底图来源"
-          value={project.coverSource}
-          options={Object.values(CoverSource).map((key) => ({
-            key,
-            label: COVER_SOURCE_MAP[key],
-          }))}
-          disabled={busy}
-          onChange={(value) =>
-            editor.patch({ coverSource: value as CoverSource })
+      <div>
+        <FileUpload
+          label={
+            project.coverImage ? '更换自定义封面底图' : '上传自定义封面底图'
           }
+          accept=".jpg,.jpeg,.png,.webp"
+          disabled={busy}
+          onFiles={(files) => editor.uploadCoverImage(files[0])}
         />
         <p className="mt-2 text-xs text-muted">
-          口播首帧使用人物封面排版，房屋素材使用房屋封面排版；单独上传底图沿用当前模板排版。点击模板会应用对应默认来源。底图居中裁切，预览、视频开头与导出封面一致。
+          上传后使用自定义底图，不改变封面样式；点击“更改封面”可切回口播或房屋素材。JPG
+          / PNG / WebP，20MB内。
         </p>
-      </div>
-      {project.coverSource === CoverSource.Image && (
-        <div>
-          <FileUpload
-            label={project.coverImage ? '更换封面底图' : '上传封面底图'}
-            accept=".jpg,.jpeg,.png,.webp"
-            disabled={busy}
-            onFiles={(files) => editor.uploadCoverImage(files[0])}
-          />
-          <p className="mt-2 text-xs text-muted">
-            JPG / PNG / WebP，20MB内，仅在本机处理。更换失败保留已有底图。
+        {project.coverSource === CoverSource.Image && !project.coverImage && (
+          <p role="alert" className="mt-2 text-xs text-danger">
+            请先上传底图，或切换为视频第一帧。
           </p>
-          {!project.coverImage && (
-            <p role="alert" className="mt-2 text-xs text-danger">
-              请先上传底图，或切换为视频第一帧。
-            </p>
-          )}
-          {project.coverImage && (
-            <img
-              src={project.coverImage}
-              alt="已上传封面底图"
-              className="mt-4 h-28 w-20 rounded-lg object-cover"
-            />
-          )}
-        </div>
-      )}
+        )}
+        {project.coverImage && (
+          <img
+            src={project.coverImage}
+            alt="已上传封面底图"
+            className="mt-4 h-28 w-20 rounded-lg object-cover"
+          />
+        )}
+        {project.coverImage && project.coverSource !== CoverSource.Image && (
+          <Button
+            className="mt-3"
+            disabled={busy}
+            onClick={() => editor.patch({ coverSource: CoverSource.Image })}
+          >
+            使用已上传底图
+          </Button>
+        )}
+      </div>
       <label className="block max-w-xs">
         <span className="mb-2 block text-body font-medium">
           封面展示时长 / 秒

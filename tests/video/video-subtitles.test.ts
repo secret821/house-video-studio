@@ -6,11 +6,15 @@ import {
   videoEditSchema,
   videoEditDraftSchema,
   EMPTY_VIDEO_EDIT,
+  CoverSource,
   HouseMediaKind,
   type VideoEditProject,
   type ImportedVideo,
 } from '../../src/services/definition/video-edit';
-import { CoverStyle } from '../../src/services/definition/project';
+import {
+  CoverStyle,
+  VideoTemplate,
+} from '../../src/services/definition/project';
 import {
   speechCaptionsSchema,
   type SpeechCaption,
@@ -131,6 +135,27 @@ test('cover versions keep old drafts readable and select the new layout by defau
       .success,
     false,
   );
+});
+test('cover artwork, source and film template remain independent in saved drafts', () => {
+  const legacy = videoEditDraftSchema.parse({
+    ...EMPTY_VIDEO_EDIT,
+    videoTemplate: VideoTemplate.Editorial,
+    coverTemplate: undefined,
+    coverStyle: CoverStyle.Original,
+    coverSource: CoverSource.House,
+  });
+  assert.equal(legacy.coverTemplate, VideoTemplate.Editorial);
+  assert.equal(legacy.coverSource, CoverSource.House);
+
+  const changed = videoEditDraftSchema.parse({
+    ...legacy,
+    coverTemplate: VideoTemplate.Classic,
+    coverStyle: CoverStyle.New,
+    coverSource: CoverSource.Opening,
+  });
+  assert.equal(changed.videoTemplate, VideoTemplate.Editorial);
+  assert.equal(changed.coverTemplate, VideoTemplate.Classic);
+  assert.equal(changed.coverSource, CoverSource.Opening);
 });
 test('old drafts remain valid; invalid, overlapping and out-of-range captions are blocked', () => {
   assert.equal(videoEditSchema.safeParse(EMPTY_VIDEO_EDIT).success, true);

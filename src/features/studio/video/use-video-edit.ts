@@ -9,14 +9,11 @@ import { createMediaId } from '../../../services/definition/media-id';
 import {
   JobStatus,
   VideoTemplate,
-  CoverStyle,
   VIDEO_TEMPLATE_MAP,
 } from '../../../services/definition/project';
 import {
   EMPTY_VIDEO_EDIT,
   CoverSource,
-  VIDEO_TEMPLATE_COVER_SOURCE_MAP,
-  COVER_SOURCE_MAP,
   VideoRole,
   HouseMediaKind,
   getHouseMaterials,
@@ -189,23 +186,12 @@ export function useVideoEdit() {
   function patch(patch: Partial<VideoEditProject>) {
     setProject((current) => ({ ...current, ...patch }));
   }
-  function selectTemplate(
-    videoTemplate: VideoTemplate,
-    coverStyle = CoverStyle.New,
-  ) {
+  function selectTemplate(videoTemplate: VideoTemplate) {
     if (busy) return;
-    const coverSource = VIDEO_TEMPLATE_COVER_SOURCE_MAP[videoTemplate];
-    if (
-      videoTemplate === project.videoTemplate &&
-      coverStyle === project.coverStyle &&
-      coverSource === project.coverSource
-    )
-      return;
-    // Re-clicking a selected template can reapply its presentation defaults after a manual cover change.
-    const next = { ...project, videoTemplate, coverStyle, coverSource };
-    setProject(next);
+    if (videoTemplate === project.videoTemplate) return;
+    setProject((current) => ({ ...current, videoTemplate }));
     setNotice({
-      text: `已切换为${VIDEO_TEMPLATE_MAP[videoTemplate].name}，封面使用${COVER_SOURCE_MAP[next.coverSource]}，文字和片尾样式同步切换；素材和房源信息保留。`,
+      text: `片内样式已切换为${VIDEO_TEMPLATE_MAP[videoTemplate].name}；封面来源与封面样式保持当前选择。`,
       error: false,
     });
   }

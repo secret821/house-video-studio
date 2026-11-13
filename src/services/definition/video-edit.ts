@@ -142,6 +142,7 @@ const videoEditFieldsSchema = z.object({
   copyDraft: savedCopyDraftSchema.nullable().optional(),
   sessionId: z.string().uuid().optional(),
   videoTemplate: videoTemplateSchema,
+  coverTemplate: z.enum(VideoTemplate).optional(),
   coverStyle: coverStyleSchema,
   opening: importedVideoSchema.nullable(),
   house: importedVideoSchema.nullable(),
@@ -168,6 +169,7 @@ const videoEditFieldsSchema = z.object({
 function applyVideoDefaults(project: z.infer<typeof videoEditFieldsSchema>) {
   return {
     ...project,
+    coverTemplate: project.coverTemplate ?? project.videoTemplate,
     coverSource:
       project.coverSource ??
       VIDEO_TEMPLATE_COVER_SOURCE_MAP[project.videoTemplate],
@@ -232,6 +234,7 @@ export type VideoEditProject = z.infer<typeof videoEditSchema>;
 export type VideoEditJob = z.infer<typeof videoEditJobSchema>;
 export const EMPTY_VIDEO_EDIT: VideoEditProject = {
   videoTemplate: VideoTemplate.Classic,
+  coverTemplate: VideoTemplate.Classic,
   coverStyle: CoverStyle.New,
   opening: null,
   house: null,

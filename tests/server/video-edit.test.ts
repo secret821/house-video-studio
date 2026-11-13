@@ -588,12 +588,11 @@ test('HTTP browsers without randomUUID can create valid unique drafts and materi
     ),
   );
   assert.equal(createVideoShots(3).length, 1);
-  assert.equal(
-    createMaterialShots([
-      { id: createMediaId(), kind: HouseMediaKind.Video, video: clip },
-    ]).length,
-    1,
-  );
+  const newShots = createMaterialShots([
+    { id: createMediaId(), kind: HouseMediaKind.Video, video: clip },
+  ]);
+  assert.equal(newShots.length, 1);
+  assert.equal(newShots[0].title, '');
 });
 test('concurrent ingests fail visibly and release their lock after failure', () => {
   const first = service.ingestVideo(

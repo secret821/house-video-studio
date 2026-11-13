@@ -9,7 +9,10 @@ import {
   Flex,
 } from '../../../share/ui';
 import { SoundOutlined, CloseOutlined } from '@ant-design/icons';
-import { VideoTemplate } from '@/services/definition/project';
+import {
+  VideoTemplate,
+  VIDEO_TEMPLATE_MAP,
+} from '@/services/definition/project';
 
 import { MusicPicker } from '../media/music-picker';
 import {
@@ -44,14 +47,7 @@ export function VideoEditSettings({
       <StudioSectionHeading
         step="03"
         title="封面与声音"
-        description={
-          <>
-            {project.videoTemplate === VideoTemplate.Editorial
-              ? '口播开场首帧作封面 · 上部文字 · 下方人物留白'
-              : '首份房屋素材作封面'}{' '}
-            · 原声保留 · 轻配乐
-          </>
-        }
+        description={<>封面来源与样式独立选择 · 原声保留 · 轻配乐</>}
       />
       <ConfigProvider componentDisabled={busy}>
         <fieldset disabled={busy}>
@@ -82,7 +78,7 @@ export function VideoEditSettings({
             items={[
               {
                 key: 'panel',
-                label: <>更换封面与展示时长</>,
+                label: <>自定义底图与展示时长</>,
                 forceRender: true,
                 children: (
                   <>
@@ -99,11 +95,34 @@ export function VideoEditSettings({
             items={[
               {
                 key: 'panel',
-                label: <>音乐、原声音量与转场</>,
+                label: <>片内样式、音乐、原声音量与转场</>,
                 forceRender: true,
                 children: (
                   <>
                     <div className="flex flex-col gap-6 pt-4">
+                      <div className="island-select">
+                        <span
+                          className="mb-2 block text-body font-medium"
+                          id="film-template-label"
+                        >
+                          片内文字与片尾样式
+                        </span>
+                        <Select
+                          fieldNames={{ value: 'key', label: 'label' }}
+                          aria-labelledby="film-template-label"
+                          value={project.videoTemplate}
+                          options={Object.values(VideoTemplate).map((key) => ({
+                            key,
+                            label: VIDEO_TEMPLATE_MAP[key].name,
+                          }))}
+                          onChange={(value) =>
+                            editor.selectTemplate(value as VideoTemplate)
+                          }
+                        />
+                        <p className="mt-2 text-xs text-muted">
+                          只改变正片文字与片尾，不改变封面来源或封面样式。
+                        </p>
+                      </div>
                       <MusicPicker
                         music={project.music}
                         busy={busy}

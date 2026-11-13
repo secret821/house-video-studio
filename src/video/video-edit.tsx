@@ -58,6 +58,7 @@ function ShotCopy({
   const timeline = getVideoEditTimeline(project);
   const frames = timeline.shots[index].frames;
   const isLast = index === project.shots.length - 1;
+  const showTitle = Boolean(shot.title && shot.title !== '房屋实拍');
   const outroOpacity = isLast
     ? interpolate(
         frame,
@@ -130,26 +131,28 @@ function ShotCopy({
             marginBottom: 22,
           }}
         >
-          房屋实拍 · 第{index + 1}段
+          第{index + 1}段
         </div>
-        <div
-          style={{
-            ...(project.videoTemplate === VideoTemplate.Editorial &&
-              EDITORIAL_TITLE),
-            fontSize: 66,
-            fontWeight: 500,
-            lineHeight: 1.3,
-            letterSpacing: 3,
-            overflowWrap: 'anywhere',
-          }}
-        >
-          {shot.title}
-        </div>
+        {showTitle && (
+          <div
+            style={{
+              ...(project.videoTemplate === VideoTemplate.Editorial &&
+                EDITORIAL_TITLE),
+              fontSize: 66,
+              fontWeight: 500,
+              lineHeight: 1.3,
+              letterSpacing: 3,
+              overflowWrap: 'anywhere',
+            }}
+          >
+            {shot.title}
+          </div>
+        )}
         <div
           style={{
             fontSize: 42,
             lineHeight: 1.55,
-            marginTop: 24,
+            marginTop: showTitle ? 24 : 0,
             opacity: 0.92,
             overflowWrap: 'anywhere',
           }}
@@ -492,12 +495,7 @@ export function VideoEditFilm({
 
 /** Freeze the selected video's actual first frame; uploaded images share the same lettering and crop. */
 export function VideoEditCover({ project }: { project: VideoEditProject }) {
-  const coverTemplate =
-    project.coverSource === CoverSource.Opening
-      ? VideoTemplate.Editorial
-      : project.coverSource === CoverSource.House
-        ? VideoTemplate.Classic
-        : project.videoTemplate;
+  const coverTemplate = project.coverTemplate;
   const first = getHouseMaterials(project)[0];
   const detailImages = getHouseMaterials(project)
     .slice(1, 3)

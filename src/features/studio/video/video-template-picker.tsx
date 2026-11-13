@@ -1,38 +1,42 @@
-/** Keep film template cards compact; cover artwork is chosen in a separate dialog. */
+/** Film templates and cover choices share reference art but keep separate state. */
 import { AppstoreOutlined, CheckCircleFilled } from '@ant-design/icons';
 import { useState } from 'react';
 import {
+  CoverStyle,
   VIDEO_TEMPLATE_MAP,
   VideoTemplate,
-  CoverStyle,
 } from '@/services/definition/project';
+import {
+  COVER_SOURCE_MAP,
+  CoverSource,
+} from '@/services/definition/video-edit';
 import { Button, Checkbox, Image, Modal, cn } from '../../../share/ui';
 
-interface Props {
-  value: VideoTemplate;
-  disabled: boolean;
-  onChange: (value: VideoTemplate, coverStyle?: CoverStyle) => void;
-  coverStyle?: CoverStyle;
-  onCoverStyleChange?: (style: CoverStyle) => void;
-  showCoverSource?: boolean;
+const TEMPLATES = [VideoTemplate.Editorial, VideoTemplate.Classic];
+const COVER_STYLES = [CoverStyle.New, CoverStyle.Original];
+const COVER_SOURCES = [CoverSource.Opening, CoverSource.House];
+const NEW_COVER_PREVIEW_REVISION = '20261113-person-banner';
+
+function coverPreview(template: VideoTemplate, style: CoverStyle) {
+  return style === CoverStyle.New
+    ? `/demo/template-${template}-new.jpg?v=${NEW_COVER_PREVIEW_REVISION}`
+    : `/demo/template-${template}.jpg`;
 }
 
-const TEMPLATES = [VideoTemplate.Editorial, VideoTemplate.Classic];
-const NEW_COVER_PREVIEW_REVISION = '20261112-gold-alpha';
-const newCoverPreview = (template: VideoTemplate) =>
-  `/demo/template-${template}-new.jpg?v=${NEW_COVER_PREVIEW_REVISION}`;
+function coverStyleLabel(template: VideoTemplate, style: CoverStyle) {
+  return `${VIDEO_TEMPLATE_MAP[template].name} · ${style === CoverStyle.New ? '新版' : '原版'}`;
+}
 
-/** Keep preview independent from selection, including while a render disables template changes. */
+/** Photo mode still selects the film template without a cover source or artwork version. */
 export function VideoTemplatePicker({
   value,
   disabled,
   onChange,
-  coverStyle,
-  onCoverStyleChange,
-  showCoverSource = false,
-}: Props) {
-  const [styleOpen, setStyleOpen] = useState(false);
-  const currentStyle = coverStyle === CoverStyle.Original ? '原版' : '新版';
+}: {
+  value: VideoTemplate;
+  disabled: boolean;
+  onChange: (value: VideoTemplate) => void;
+}) {
   return (
     <section
       className={cn(
@@ -41,35 +45,20 @@ export function VideoTemplatePicker({
       )}
       aria-label="视频模板"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <h2 className="mb-1 flex items-center gap-2.5 text-heading-3 font-semibold">
-          <AppstoreOutlined
-            className="text-lg text-primary-hover"
-            aria-hidden="true"
-          />
-          视频模板
-        </h2>
-        {coverStyle && onCoverStyleChange && (
-          <Button disabled={disabled} onClick={() => setStyleOpen(true)}>
-            切换封面样式 · {currentStyle}
-          </Button>
-        )}
-      </div>
+      <h2 className="flex items-center gap-2.5 text-heading-3 font-semibold">
+        <AppstoreOutlined className="text-lg text-primary-hover" aria-hidden />
+        视频模板
+      </h2>
       <div className="grid grid-cols-2 gap-3 max-[600px]:grid-cols-1">
         {TEMPLATES.map((template) => {
           const selected = value === template;
-          const editorial = template === VideoTemplate.Editorial;
           const option = VIDEO_TEMPLATE_MAP[template];
-          const preview =
-            coverStyle === CoverStyle.New
-              ? newCoverPreview(template)
-              : `/demo/template-${template}.jpg`;
           return (
             <div
               key={template}
               className={cn(
-                'relative flex min-w-0 items-center justify-start gap-4 rounded border p-3',
-                'bg-panel text-left font-normal whitespace-normal text-ink',
+                'relative flex min-w-0 items-center gap-4 rounded border p-3',
+                'bg-panel text-left text-ink',
                 {
                   'border-primary bg-primary-soft': selected,
                   'border-line hover:border-primary': !selected,
@@ -77,14 +66,10 @@ export function VideoTemplatePicker({
               )}
             >
               <Image
-                src={preview}
-                alt={
-                  editorial
-                    ? `${option.name}封面效果参考：虚构人物口播首帧示意`
-                    : `${option.name}封面效果参考`
-                }
+                src={`/demo/template-${template}.jpg`}
+                alt={`${option.name}模板示例图`}
                 classNames={{
-                  root: 'relative block h-[114px] w-16 shrink-0 overflow-hidden bg-[#222] max-[600px]:h-[92px] max-[600px]:w-[52px]',
+                  root: 'block h-[114px] w-16 shrink-0 overflow-hidden bg-[#222]',
                   image: 'h-full w-full object-contain',
                 }}
                 preview={{ cover: '预览' }}
@@ -98,27 +83,15 @@ export function VideoTemplatePicker({
                 aria-label={`选择${option.name}模板`}
                 aria-pressed={selected}
                 disabled={disabled}
-                onClick={() => onChange(template, coverStyle)}
+                onClick={() => onChange(template)}
               >
                 <span className="grid min-w-0 gap-1 pr-4">
-                  <strong
-                    className={cn(
-                      'flex flex-wrap items-center gap-2 text-data font-semibold',
-                      {
-                        'text-primary-hover': selected,
-                      },
-                    )}
-                  >
+                  <strong className="text-data font-semibold">
                     {option.name}
                   </strong>
                   <span className="text-caption text-muted">
                     {option.description}
                   </span>
-                  {showCoverSource && (
-                    <span className="text-caption text-muted">
-                      默认封面：{editorial ? '口播视频首帧' : '首份房屋素材'}
-                    </span>
-                  )}
                 </span>
                 {selected && (
                   <CheckCircleFilled
@@ -131,46 +104,142 @@ export function VideoTemplatePicker({
           );
         })}
       </div>
-      {coverStyle && onCoverStyleChange && (
-        <Modal
-          title="切换封面样式"
-          open={styleOpen}
-          onCancel={() => setStyleOpen(false)}
-          footer={null}
-        >
-          <div className="grid grid-cols-2 gap-3 max-[480px]:grid-cols-1">
-            {[CoverStyle.New, CoverStyle.Original].map((style) => (
-              <div
-                key={style}
-                className="flex items-center gap-3 rounded border border-line p-3"
-              >
-                <Checkbox
-                  checked={coverStyle === style}
-                  disabled={disabled}
-                  onChange={() => onCoverStyleChange(style)}
-                  aria-label={`选择${style === CoverStyle.New ? '新版' : '原版'}封面样式`}
-                />
-                <Image
-                  src={
-                    style === CoverStyle.New
-                      ? newCoverPreview(value)
-                      : `/demo/template-${value}.jpg`
-                  }
-                  alt={`${VIDEO_TEMPLATE_MAP[value].name}${style === CoverStyle.New ? '新版' : '原版'}封面参考图`}
-                  classNames={{
-                    root: 'block h-[114px] w-16 shrink-0 overflow-hidden bg-[#222]',
-                    image: 'h-full w-full object-contain',
-                  }}
-                  preview={{ cover: '预览' }}
-                />
-                <span className="text-body font-medium">
-                  {style === CoverStyle.New ? '新版' : '原版'}
-                </span>
-              </div>
-            ))}
-          </div>
-        </Modal>
+    </section>
+  );
+}
+
+/** Video covers choose the source and one of four artwork layouts independently. */
+export function VideoCoverPicker({
+  template,
+  style,
+  source,
+  disabled,
+  onStyleChange,
+  onSourceChange,
+}: {
+  template: VideoTemplate;
+  style: CoverStyle;
+  source: CoverSource;
+  disabled: boolean;
+  onStyleChange: (template: VideoTemplate, style: CoverStyle) => void;
+  onSourceChange: (source: CoverSource) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const currentLabel = coverStyleLabel(template, style);
+  return (
+    <section
+      className={cn(
+        'mb-6 rounded-lg border border-line bg-panel px-6 py-5',
+        'max-[600px]:mb-4 max-[600px]:p-4',
       )}
+      aria-label="视频封面"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h2 className="flex items-center gap-2.5 text-heading-3 font-semibold">
+          <AppstoreOutlined
+            className="text-lg text-primary-hover"
+            aria-hidden
+          />
+          视频封面
+        </h2>
+        <Button disabled={disabled} onClick={() => setOpen(true)}>
+          更改
+        </Button>
+      </div>
+      <div className="mt-4 flex items-center gap-4">
+        <Image
+          src={coverPreview(template, style)}
+          alt={`${currentLabel}版式示例图`}
+          classNames={{
+            root: 'block h-[92px] w-[52px] shrink-0 overflow-hidden bg-[#222]',
+            image: 'h-full w-full object-contain',
+          }}
+          preview={{ cover: '预览' }}
+        />
+        <div className="min-w-0">
+          <p className="text-body font-semibold text-ink">{currentLabel}</p>
+          <p className="text-caption text-muted">
+            封面来源：{COVER_SOURCE_MAP[source]}
+          </p>
+          <p className="text-caption text-muted">
+            示例图仅展示版式，实际画面使用当前素材。
+          </p>
+        </div>
+      </div>
+      <Modal
+        title="更改封面"
+        width={720}
+        open={open}
+        onCancel={() => setOpen(false)}
+        footer={null}
+      >
+        <div className="grid gap-6">
+          <section aria-label="封面截取来源">
+            <h3 className="mb-3 text-body font-semibold text-ink">
+              封面截取来源
+            </h3>
+            <div className="grid grid-cols-2 gap-3 max-[480px]:grid-cols-1">
+              {COVER_SOURCES.map((option) => (
+                <div
+                  key={option}
+                  className="flex items-center gap-3 rounded border border-line p-3 text-body"
+                >
+                  <Checkbox
+                    checked={source === option}
+                    disabled={disabled}
+                    onChange={() => onSourceChange(option)}
+                    aria-label={`选择${COVER_SOURCE_MAP[option]}`}
+                  />
+                  {COVER_SOURCE_MAP[option]}
+                </div>
+              ))}
+            </div>
+            {source === CoverSource.Image && (
+              <p className="mt-2 text-caption text-muted">
+                当前使用单独上传的封面底图；选择口播或房屋素材即可切换。
+              </p>
+            )}
+          </section>
+          <section aria-label="封面样式">
+            <h3 className="mb-3 text-body font-semibold text-ink">封面样式</h3>
+            <div className="grid grid-cols-2 gap-3 max-[480px]:grid-cols-1">
+              {TEMPLATES.flatMap((option) =>
+                COVER_STYLES.map((version) => {
+                  const selected = template === option && style === version;
+                  const label = coverStyleLabel(option, version);
+                  return (
+                    <div
+                      key={`${option}-${version}`}
+                      className={cn(
+                        'flex items-center gap-3 rounded border p-3',
+                        { 'border-primary bg-primary-soft': selected },
+                        { 'border-line': !selected },
+                      )}
+                    >
+                      <Checkbox
+                        checked={selected}
+                        disabled={disabled}
+                        onChange={() => onStyleChange(option, version)}
+                        aria-label={`选择${label}封面样式`}
+                      />
+                      <Image
+                        src={coverPreview(option, version)}
+                        alt={`${label}封面样式示例图`}
+                        classNames={{
+                          root: 'block h-[114px] w-16 shrink-0 overflow-hidden bg-[#222]',
+                          image: 'h-full w-full object-contain',
+                        }}
+                        preview={{ cover: '预览' }}
+                      />
+                      <span className="text-body font-medium">{label}</span>
+                    </div>
+                  );
+                }),
+              )}
+            </div>
+          </section>
+        </div>
+      </Modal>
     </section>
   );
 }

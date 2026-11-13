@@ -287,7 +287,7 @@ function ClassicCoverCopy({
   );
 }
 
-/** New layouts use the same editable copy as the original covers. */
+/** A lower-third headline keeps the speaker's face and platform controls clear. */
 function NewEditorialCoverCopy({
   name,
   price,
@@ -297,30 +297,45 @@ function NewEditorialCoverCopy({
 }: CoverCopyProps) {
   const detailFields = [facts, price, extra].filter(Boolean);
   const detailLength = detailFields.join(' ｜ ').length;
+  const compact = name.length > 20 || detailLength > 70 || contact.length > 28;
   return (
     <>
       <div
         style={{
           position: 'absolute',
-          top: 640,
+          top: 880,
           bottom: 410,
-          left: '51%',
-          right: 24,
+          left: 0,
+          right: 0,
+          padding: '42px 46px 54px',
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'center',
+          alignItems: 'center',
+          background:
+            'linear-gradient(180deg,rgba(0,0,0,.06),rgba(0,0,0,.69) 15%,rgba(0,0,0,.7) 82%,rgba(0,0,0,.05))',
           color: '#fff',
         }}
       >
         <div
           style={{
-            color: '#ffe2a3',
-            fontSize: name.length > 16 ? 68 : name.length > 8 ? 96 : 124,
+            color: '#ffe119',
+            fontSize: compact
+              ? 60
+              : name.length > 16
+                ? 68
+                : name.length > 8
+                  ? 108
+                  : name.length > 4
+                    ? 146
+                    : 172,
             fontWeight: 900,
-            lineHeight: 1.15,
+            WebkitTextStroke: '10px #0b0909',
+            paintOrder: 'stroke fill',
+            lineHeight: 1.12,
             textAlign: 'center',
             overflowWrap: 'anywhere',
-            textShadow: '0 4px 10px rgba(0,0,0,.85)',
+            textShadow: '6px 9px 0 rgba(0,0,0,.62)',
           }}
         >
           {name}
@@ -328,13 +343,21 @@ function NewEditorialCoverCopy({
         {(facts || price || extra) && (
           <div
             style={{
-              marginTop: 32,
-              fontSize: detailLength > 40 ? 39 : detailLength > 20 ? 48 : 58,
-              fontWeight: 700,
+              marginTop: compact ? 14 : 24,
+              fontSize: compact
+                ? 30
+                : detailLength > 40
+                  ? 40
+                  : detailLength > 20
+                    ? 48
+                    : 58,
+              fontWeight: 800,
               textAlign: 'center',
-              lineHeight: 1.35,
+              lineHeight: 1.3,
               overflowWrap: 'anywhere',
-              textShadow: '0 3px 8px rgba(0,0,0,.9)',
+              WebkitTextStroke: '5px #141414',
+              paintOrder: 'stroke fill',
+              textShadow: '3px 5px 0 rgba(0,0,0,.6)',
             }}
           >
             {detailFields.map((value, index) => (
@@ -352,25 +375,22 @@ function NewEditorialCoverCopy({
             ))}
           </div>
         )}
+        {contact && (
+          <div
+            style={{
+              marginTop: compact ? 14 : 22,
+              fontSize: compact ? 30 : 42,
+              fontWeight: 700,
+              textAlign: 'center',
+              lineHeight: 1.25,
+              WebkitTextStroke: '4px #141414',
+              paintOrder: 'stroke fill',
+            }}
+          >
+            {contact}
+          </div>
+        )}
       </div>
-      {contact && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: 170,
-            left: '51%',
-            right: 24,
-            color: '#fff',
-            fontSize: 46,
-            fontWeight: 700,
-            textAlign: 'center',
-            lineHeight: 1.3,
-            textShadow: '0 3px 8px rgba(0,0,0,.9)',
-          }}
-        >
-          {contact}
-        </div>
-      )}
       <CoverDisclaimer bottom={38} />
     </>
   );
